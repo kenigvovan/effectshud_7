@@ -164,7 +164,7 @@ namespace effectshud.src.gui.elements
                 Bounds.absInnerWidth = 64;
             api.Render.Render2DTexturePremultipliedAlpha(imageTexture.TextureId,
                                                                 (int)Bounds.renderX,
-                                                                (int)Bounds.renderY,
+                                                                (int)Bounds.renderY - 20,
                                                                 (int)Bounds.InnerWidth,
                                                                 (float)((int)Bounds.InnerHeight * 0.8), 50f, null);
             api.Render.Render2DTexturePremultipliedAlpha(textTexture.TextureId,
