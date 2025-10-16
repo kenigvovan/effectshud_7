@@ -1,18 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <OutputPath>bin\$(Configuration)\Mods\mod</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="cairo-sharp">
-      <HintPath>..\..\..\..\..\AppData\Roaming\Vintagestory\Lib\cairo-sharp.dll</HintPath>
+      <HintPath>$(VINTAGE_STORY)/Lib/cairo-sharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="SkiaSharp">
-      <HintPath>..\..\..\..\..\AppData\Roaming\Vintagestory\Lib\SkiaSharp.dll</HintPath>
+      <HintPath>$(VINTAGE_STORY)/Lib/SkiaSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="VintagestoryAPI">
