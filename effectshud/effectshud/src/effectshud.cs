@@ -1,18 +1,14 @@
-﻿using effectshud.src.DefaultEffects;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using effectshud.src.DefaultEffects;
 using effectshud.src.gui;
 using HarmonyLib;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Server;
-using Vintagestory.Server;
 
 namespace effectshud.src
 {
@@ -180,7 +176,6 @@ namespace effectshud.src
             TextCommandResult tcr = new TextCommandResult();
             tcr.Status = EnumCommandStatus.Success;
             IServerPlayer player = args.Caller.Player as IServerPlayer;
-            //player.Entity.SidedProperties
             if (player.WorldData.CurrentGameMode != EnumGameMode.Creative)
             {
                 return tcr;

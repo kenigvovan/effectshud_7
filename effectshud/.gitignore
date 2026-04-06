@@ -672,4 +672,7 @@ fabric.properties
 ### VisualStudio Patch ###
 # Additional files built by Visual Studio
 
+# Markdown docs
+*.md
+
 # End of https://www.toptal.com/developers/gitignore/api/csharp,visualstudio,visualstudiocode,rider

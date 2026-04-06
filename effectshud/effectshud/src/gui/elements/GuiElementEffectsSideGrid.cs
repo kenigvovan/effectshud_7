@@ -1,11 +1,6 @@
-﻿using Cairo;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using Cairo;
 using Vintagestory.API.Client;
-using Vintagestory.API.Common;
 
 namespace effectshud.src.gui.elements
 {
@@ -28,33 +23,11 @@ namespace effectshud.src.gui.elements
         }
         public override void RenderInteractiveElements(float deltaTime)
         {
-            bool shouldRecompose = false;
-            string typeIdToRemove = null;
             base.RenderInteractiveElements(deltaTime);
             foreach(var it in effectsCells)
             {
                 it.RenderInteractiveElements(deltaTime);
-               /* if(it.IsExpired)
-                {
-                    //shouldRecompose = true;
-                    typeIdToRemove = it.TypeId;
-                }*/
             }
-           /* if (typeIdToRemove != null)
-            {
-                this.RemoveEffectCell(typeIdToRemove);
-                
-            }*/
-            /*if (shouldRecompose)
-            {
-                effectshud.capi.Event.RegisterCallback((dt =>
-                {
-                    effectshud effectsHUD = effectshud.capi.ModLoader.GetModSystem<effectshud>();
-                    effectsHUD.effectsHUD.ComposeGuis();
-                }), 0
-               );
-               shouldRecompose = false;
-            }*/
         }
         public void RemoveEffectCell(string typeId)
         {

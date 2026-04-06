@@ -1,13 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using System;
 using ProtoBuf;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
-using Vintagestory.API.Server;
 
 namespace effectshud.src
 {
