@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.CANWeightBuff)]
     public class CANWeightBuffEffect: Effect
     {
         public float statChangeValue = 1000;
         public CANWeightBuffEffect()
         {
-            effectTypeId = "canweightbuff";
         }
         public CANWeightBuffEffect(int minutes = 1, float statChangeValue = 1000, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             this.statChangeValue = statChangeValue;
-            SetExpiryInRealMinutes(minutes);       
-            effectTypeId = "canweightbuff";
+            SetExpiryInRealMinutes(minutes);
         }
         public override void OnStart()
         {

@@ -1,10 +1,9 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.Invisibility)]
     public class InvisibilityEffect: Effect
     {
-        public InvisibilityEffect()
-        {
-            this.effectTypeId = "invisibility";
-        }
     }
 }

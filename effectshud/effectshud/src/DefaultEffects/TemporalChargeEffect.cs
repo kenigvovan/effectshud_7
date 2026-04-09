@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.CanTemporalCharge)]
     public class TemporalChargeEffect: Effect
     {
         public float statChangeValue = 0.15f;
         public TemporalChargeEffect()
         {
-            effectTypeId = "cantemporalcharge";
         }
         public TemporalChargeEffect(int minutes = 1, float statChangeValue = 0.1f, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             this.statChangeValue = statChangeValue;
             SetExpiryInRealMinutes(minutes);
-            effectTypeId = "cantemporalcharge";
         }
         public override void OnStart()
         {

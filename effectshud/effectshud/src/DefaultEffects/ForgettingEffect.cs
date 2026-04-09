@@ -1,15 +1,13 @@
 ﻿using Vintagestory.API.Common;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
+using effectshud.src;
 
 namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.Forgetting, shouldBeRendered: false)]
     public class ForgettingEffect: Effect
     {
-        public ForgettingEffect()
-        {
-            this.effectTypeId = "forgetting";
-        }
         public override void OnStart()
         {           
             if(((entity as EntityPlayer).Player as IServerPlayer).WorldData != null)

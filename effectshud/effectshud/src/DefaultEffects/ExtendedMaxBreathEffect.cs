@@ -1,20 +1,18 @@
 ﻿using Vintagestory.GameContent;
+using effectshud.src;
 
 namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.ExtendedMaxBreath)]
     public class ExtendedMaxBreathEffect: Effect
     {
         public float hpPerTick = 0.05f;
         public ExtendedMaxBreathEffect()
         {
-            this.
-            effectTypeId = "extendedmaxbreath";
         }
         public ExtendedMaxBreathEffect(int ticks = 20, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInTicks(ticks);
-            
-            effectTypeId = "extendedmaxbreath";
         }
         public override void OnStart()
         {

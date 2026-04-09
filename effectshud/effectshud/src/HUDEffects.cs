@@ -50,7 +50,7 @@ namespace effectshud.src
             {
                 if(it.duration <= 0)
                 {
-                    effectshud.clientsActiveEffects.Remove(it.typeId);
+                    effectshud.Instance.clientsActiveEffects.Remove(it.typeId);
                 }
             }
             var innerBounds = bounds1.CopyOffsetedSibling(5, 5);
@@ -62,7 +62,7 @@ namespace effectshud.src
             }
             Compo2.AddInteractiveElement(gefsg, "cellsgrid");
 
-            effectshud.redrawEffectPictures = false;
+            effectshud.Instance.redrawEffectPictures = false;
             Compo.Compose();
             Compo2.Compose();
             

@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.MiningSlow, positive: false)]
     public class MiningSlowEffect : Effect
     {
         public float statChangeValue = -0.25f;
         public MiningSlowEffect()
         {
-            effectTypeId = "miningslow";
         }
         public MiningSlowEffect(int tier = 1, float statChangeValue = -0.25f, bool infinite = false):base(tier, infinite)
         {
             SetExpiryInRealMinutes(1);
             this.statChangeValue = statChangeValue;
-            effectTypeId = "miningslow";
         }
         public override void OnStart()
         {

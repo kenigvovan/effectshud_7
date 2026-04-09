@@ -56,7 +56,7 @@ namespace effectshud.src
                 var tmp = JsonConvert.DeserializeObject<List<SerializedEffect>>(effectsTree.GetString("activeEffectsData"));
                 foreach(var it in tmp)
                 {
-                    effectshud.effects.TryGetValue(it.typeId, out Type ourType);
+                    effectshud.Instance.effects.TryGetValue(it.typeId, out Type ourType);
                     if(activeEffects.TryGetValue(it.typeId, out _))
                     {
                        var tmpE = JsonConvert.DeserializeObject(it.data, ourType) as Effect;
@@ -129,7 +129,7 @@ namespace effectshud.src
             if (entity.Api.Side == EnumAppSide.Server) {
                 double now = Now;
                 accum += deltaTime;
-                if (accum > effectshud.config.TICK_EVERY_SECONDS)
+                if (accum > effectshud.Instance.config.TICK_EVERY_SECONDS)
                 {
                     accum = 0;
                     
@@ -167,11 +167,12 @@ namespace effectshud.src
                 accum += deltaTime;
                 if (accum > 0.5f)
                 {
+                    float elapsed = accum;
                     accum = 0;
 
                     foreach (var effect in onlyClientsActiveEffects.ToArray())
                     {
-                        effect.Value.duration -= accum;
+                        effect.Value.duration -= elapsed;
 
                         if (effect.Value.duration < 0)
                         {
@@ -182,9 +183,9 @@ namespace effectshud.src
                 }
                 if(effectRemoved)
                 {
-                    effectshud.capi.Event.RegisterCallback((dt =>
+                    effectshud.Instance.capi.Event.RegisterCallback((dt =>
                     {
-                        effectshud effectsHUD = effectshud.capi.ModLoader.GetModSystem<effectshud>();
+                        effectshud effectsHUD = effectshud.Instance.capi.ModLoader.GetModSystem<effectshud>();
                         effectsHUD.effectsHUD?.ComposeGuis();
                     }), 0
                     );
@@ -233,19 +234,25 @@ namespace effectshud.src
                     effectData.Add(new EffectClientData { typeId = it.effectTypeId, duration = it.ExpireTimestampInDays == double.PositiveInfinity ? (it.ExpireTick - it.TickCounter) : (int)(it.ExpireTimestampInDays * 24 * 60 * 60), tier = it.Tier, infinite = it.infinite, positive = it.positive });
                 }
             }
+            var ownerPlayer = (entity as EntityPlayer)?.Player as IServerPlayer;
+            if (ownerPlayer == null) return;
+
             var packetToSend = new EffectsSyncPacket()
             {
-                playerUID = (entity as EntityPlayer).PlayerUID,
+                playerUID = ownerPlayer.PlayerUID,
                 currentEffectsData = JsonConvert.SerializeObject(effectData),
                 typeIdsToRemove = effectsTypeIdsToRemove == null ? null : new HashSet<string>(effectsTypeIdsToRemove)
             };
-            var f = effectshud.sapi.World.GetPlayersAround(entity.ServerPos.XYZ, 15000, 15000);
-            foreach (var it in f)
+            effectshud.Instance.serverChannel.SendPacket(packetToSend, ownerPlayer);
+
+            bool affectsInvisibility = packetToSend.typeIdsToRemove?.Contains("invisibility") == true;
+            if (affectsInvisibility)
             {
-                effectshud.serverChannel.SendPacket(packetToSend, it as IServerPlayer);
-            }
-            if (!f.Contains((entity as EntityPlayer).Player)){
-                effectshud.serverChannel.SendPacket(packetToSend, (entity as EntityPlayer).Player as IServerPlayer);
+                foreach (var it in effectshud.Instance.sapi.World.GetPlayersAround(entity.ServerPos.XYZ, 128, 128))
+                {
+                    if (it != ownerPlayer)
+                        effectshud.Instance.serverChannel.SendPacket(packetToSend, it as IServerPlayer);
+                }
             }
         }
         public bool AddEffect(Effect ef)
@@ -265,14 +272,9 @@ namespace effectshud.src
             {
                 SendActiveEffectsToClient(null, ef);
             }
-            //effectshud.sapi.Network.bro
+            //effectshud.Instance.sapi.Network.bro
             return true;
         }
-        public override void OnReceivedServerPacket(int packetid, byte[] data, ref EnumHandling handled)
-        {
-            var c = 2;
-        }
-
         public override void DidAttack(DamageSource source, EntityAgent targetEntity, ref EnumHandling handled)
         {
             foreach (var it in activeEffects.Values)

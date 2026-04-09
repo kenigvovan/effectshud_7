@@ -1,7 +1,9 @@
 ﻿using Vintagestory.API.Common;
+using effectshud.src;
 
 namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.Bleeding, positive: false)]
     public class BleedingEffect : Effect
     {
         public float hpPerTick = 0.05f;
@@ -16,13 +18,11 @@ namespace effectshud.src.DefaultEffects
         }
         public BleedingEffect()
         {
-            effectTypeId = "bleeding";
         }
         public BleedingEffect(int ticks = 20, float hpPerTick = 0.08f, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInTicks(ticks);
             this.hpPerTick = hpPerTick * tier;
-            effectTypeId = "bleeding";
         }
         public override void OnTick()
         {

@@ -111,8 +111,8 @@ namespace effectshud.src.gui.elements
                                                                 (int)Bounds.InnerWidth,
                                                                 (float)((int)Bounds.InnerHeight * 0.8), 50f, null);
             api.Render.Render2DTexturePremultipliedAlpha(textTexture.TextureId,
-                                                                (float)((int)Bounds.renderX + effectshud.config.EFFECT_ICON_SIZE * 0.5), 
-                                                                (float)((int)Bounds.renderY + effectshud.config.EFFECT_ICON_SIZE),
+                                                                (float)((int)Bounds.renderX + effectshud.Instance.config.EFFECT_ICON_SIZE * 0.5), 
+                                                                (float)((int)Bounds.renderY + effectshud.Instance.config.EFFECT_ICON_SIZE),
                                                                 (int)Bounds.InnerWidth,
                                                                 (int)Bounds.InnerHeight, 50f, new Vec4f(0.3f, 0.1f, 0.4f, 1));
         }

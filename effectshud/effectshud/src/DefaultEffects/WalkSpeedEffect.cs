@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.WalkSpeed)]
     public class WalkSpeedEffect: Effect
     {
         public float statChangeValue = 0.25f;
         public WalkSpeedEffect()
         {
-            effectTypeId = "walkspeed";
         }
         public WalkSpeedEffect(int tier = 1, float statChangeValue = 0.25f, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInRealMinutes(1 * tier);
             this.statChangeValue = statChangeValue;
-            effectTypeId = "walkspeed";
         }
         public override void OnStart()
         {

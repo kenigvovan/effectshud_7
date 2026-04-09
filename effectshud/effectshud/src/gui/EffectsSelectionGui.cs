@@ -106,13 +106,13 @@ namespace effectshud.src.gui
         }
         public string [] GetEffectsCodes()
         {
-            return effectshud.effectsPosNeg.Keys.ToArray();
+            return effectshud.Instance.effectsPosNeg.Keys.ToArray();
         }
         public string[] GetEffectsNames()
         {
-            string[] names = new string[effectshud.effectsPosNeg.Keys.Count];
+            string[] names = new string[effectshud.Instance.effectsPosNeg.Keys.Count];
             int i = 0;
-            foreach (var it in effectshud.effectsPosNeg.Keys)
+            foreach (var it in effectshud.Instance.effectsPosNeg.Keys)
             {
                 names[i] = Lang.Get("effectshud:" + it);
                 i++;
