@@ -14,14 +14,15 @@ namespace effectshud.src
             EBEffectsAffected ebef = entity.GetBehavior<EBEffectsAffected>();
             if(ebef != null)
             {
-                ebef.SendActiveEffectsToClient(null);
+                ebef.SendAllEffectsToClient();
             }
             return true;
         }
 
         public static bool Prefix_DoRender3DOpaqueBatched(EntityShapeRenderer __instance)
         {
-            if (effectshud.invisiblePlayers.ContainsKey((__instance.entity as EntityPlayer)?.PlayerUID))
+            var uid = (__instance.entity as EntityPlayer)?.PlayerUID;
+            if (uid != null && effectshud.invisiblePlayers.ContainsKey(uid))
             {
                 return false;
             }
@@ -30,7 +31,8 @@ namespace effectshud.src
 
         public static bool Prefix_DoRender2D(EntityShapeRenderer __instance)
         {
-            if (effectshud.invisiblePlayers.ContainsKey((__instance.entity as EntityPlayer)?.PlayerUID))
+            var uid = (__instance.entity as EntityPlayer)?.PlayerUID;
+            if (uid != null && effectshud.invisiblePlayers.ContainsKey(uid))
             {
                 return false;
             }

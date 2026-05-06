@@ -2,6 +2,7 @@ using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.Client.NoObf;
 using Vintagestory.GameContent;
+using effectshud.src.gui;
 
 namespace effectshud.src
 {
@@ -25,7 +26,7 @@ namespace effectshud.src
 
         public static void Postfix_CoordsHUD_OnGuiOpened(HudElementCoordinates __instance)
         {
-            effectshud.Instance.capi.Event.RegisterCallback((dt =>
+            effectshud.ClientSideApi.Event.RegisterCallback((dt =>
             {
                 updateOffset();
             }), 1 * 1000);
@@ -35,9 +36,9 @@ namespace effectshud.src
         {
             double startPointMap = -1;
             double startPointCoords = -1;
-            lock (effectshud.Instance.capi.OpenedGuis)
+            lock (effectshud.ClientSideApi.OpenedGuis)
             {
-                foreach (var it in effectshud.Instance.capi.OpenedGuis)
+                foreach (var it in effectshud.ClientSideApi.OpenedGuis)
                 {
                     if ((it as GuiDialog).DebugName.Equals("GuiDialogWorldMap"))
                     {
@@ -59,19 +60,19 @@ namespace effectshud.src
 
                 if (startPointCoords != -1 && startPointMap != -1)
                 {
-                    HUDEffects.glOffset = (int)(startPointCoords + startPointMap) + 32;
+                    HUDEffectsImGui.glOffset = (int)(startPointCoords + startPointMap) + 32;
                 }
                 else if (startPointCoords != -1)
                 {
-                    HUDEffects.glOffset = (int)(startPointCoords) + 32;
+                    HUDEffectsImGui.glOffset = (int)(startPointCoords) + 32;
                 }
                 else if (startPointMap != -1)
                 {
-                    HUDEffects.glOffset = (int)(startPointMap) + 32;
+                    HUDEffectsImGui.glOffset = (int)(startPointMap) + 32;
                 }
                 else
                 {
-                    HUDEffects.glOffset = 64;
+                    HUDEffectsImGui.glOffset = 64;
                 }
             }
         }

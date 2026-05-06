@@ -3,10 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using effectshud.src.DefaultEffects;
 using effectshud.src.gui;
 using HarmonyLib;
-using Newtonsoft.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -17,34 +15,28 @@ namespace effectshud.src
     public class effectshud: ModSystem
     {
         public static effectshud Instance { get; private set; }
+        public static ICoreClientAPI ClientSideApi { get; private set; }
+        public static ICoreServerAPI ServerSideApi { get; private set; }
         public const string harmonyID = "effectshud.Patches";
         public static ConcurrentDictionary<string, byte> invisiblePlayers;
-        public static EffectsSelectionGui effectsSelectionGui { get; set; }
+        public static EffectsSelectionGuiImGui effectsSelectionGuiImGui { get; set; }
+        public HUDEffectsImGui effectsHUDImGui;
 
-        public ICoreServerAPI sapi;
-        public ICoreClientAPI capi;
         public Harmony harmonyInstance;
-        public List<TrackedEffect> trackedEffects;
         public Dictionary<string, Type> effects;
-        public bool showHUD = true;
         internal IClientNetworkChannel clientChannel;
-        public Dictionary<string, EffectClientData> clientsActiveEffects;
-        public HUDEffects effectsHUD;
         public Dictionary<string, bool> effectsPosNeg;
         public Dictionary<string, bool> effectsShouldBeRendered;
         internal IServerNetworkChannel serverChannel;
-        public bool redrawEffectPictures = true;
         public Config config;
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
             Instance = this;
-            trackedEffects = new List<TrackedEffect>();
             if (effects == null)
             {
                 effects = new Dictionary<string, Type>();
             }
-            clientsActiveEffects = new Dictionary<string, EffectClientData>();
             effectsPosNeg = new Dictionary<string, bool>();
             effectsShouldBeRendered = new Dictionary<string, bool>();
             invisiblePlayers = new ConcurrentDictionary<string, byte>();
@@ -65,12 +57,8 @@ namespace effectshud.src
         }
         public override void StartClientSide(ICoreClientAPI api)
         {
-            capi = api;
+            ClientSideApi = api;
             base.StartClientSide(api);
-            //var c =
-               /* Environment.SetEnvironmentVariable("TEXTURE_DEBUG_DISPOSE", "1");
-            var c = Environment.GetEnvironmentVariable("CAIRO_DEBUG_DISPOSE");*/
-            api.Gui.RegisterDialog((GuiDialog)new HUDEffects((ICoreClientAPI)api));
             harmonyInstance = new Harmony(harmonyID);
             api.Input.RegisterHotKey("effectsghud", "Show effects hud", GlKeys.L, HotkeyType.GUIOrOtherControls);
             api.Input.SetHotKeyHandler("effectsghud", new ActionConsumable<KeyCombination>(this.OnHotKeySkillDialog));
@@ -94,73 +82,50 @@ namespace effectshud.src
             clientChannel.RegisterMessageType(typeof(EffectsSyncPacket));
             clientChannel.SetMessageHandler<EffectsSyncPacket>((packet) =>
             {
-                var player = capi.World.PlayerByUid(packet.playerUID);
+                var player = ClientSideApi.World.PlayerByUid(packet.playerUID);
                 if(player?.Entity != null)
                 {
                     var ebef = player.Entity.GetBehavior<EBEffectsAffected>();
                     if(ebef != null)
                     {
-                        if (packet.currentEffectsData != null)
+                        if (packet.effectsToAddOrUpdate != null)
                         {
-                            
-                            foreach (var it in JsonConvert.DeserializeObject<List<EffectClientData>>(packet.currentEffectsData))
+                            foreach (var it in packet.effectsToAddOrUpdate)
                             {
-                                if(it.typeId.Equals(EffectTypeIds.Invisibility))
-                                {
+                                if (it.typeId.Equals(EffectTypeIds.Invisibility))
                                     invisiblePlayers.TryAdd(packet.playerUID, 0);
-                                }
+
                                 if (ebef.onlyClientsActiveEffects.TryGetValue(it.typeId, out EffectClientData ecd))
                                 {
                                     ecd.tier = it.tier;
                                     ecd.infinite = it.infinite;
                                     ecd.duration = it.duration;
-                                    ecd.typeId = it.typeId; 
+                                    ecd.typeId = it.typeId;
                                     ecd.positive = it.positive;
                                 }
                                 else
                                 {
                                     ebef.onlyClientsActiveEffects[it.typeId] = it;
-                                    effectsHUD?.CellsGrid?.AddEffectCell(it);                                    
                                 }
                             }
-                        }
-                        if (packet.playerUID.Equals(capi.World.Player.PlayerUID))
-                        {
-                            redrawEffectPictures = true;
                         }
                         if (packet.typeIdsToRemove != null)
                         {
-                            if(packet.typeIdsToRemove.Contains(EffectTypeIds.Invisibility))
-                            {
+                            if (packet.typeIdsToRemove.Contains(EffectTypeIds.Invisibility))
                                 invisiblePlayers.TryRemove(packet.playerUID, out _);
-                            }
+
                             foreach (var effToRemove in packet.typeIdsToRemove.ToArray())
                             {
-                                if (ebef.onlyClientsActiveEffects.TryGetValue(effToRemove, out EffectClientData ecd))
-                                {
-                                    effectsHUD?.CellsGrid?.RemoveEffectCell(ecd.typeId);
-                                    ebef.onlyClientsActiveEffects.Remove(effToRemove);
-                                }
+                                ebef.onlyClientsActiveEffects.Remove(effToRemove);
                             }
                         }
                     }
                 }
 
-                effectsHUD?.ComposeGuis();
-                if (packet?.typeIdsToRemove?.Count > 0 && effectsHUD != null)
-                {                    
-                    //effectsHUD?.ComposeGuis();
-                }
-
-                //effectsHUD = new HUDEffects(capi);
-                /*if (showHUD && effectsHUD != null)
-                {
-                    effectsHUD.ComposeGuis();
-                }*/
             });
 
-            effectsHUD = new HUDEffects(capi);
-            effectsHUD.TryOpen();
+            effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
+            effectsHUDImGui.Open();
         }
         public static bool RegisterClientEffectData(string typeId, bool positive = true, bool shouldBeRendered = true)
         {
@@ -172,58 +137,31 @@ namespace effectshud.src
         {
             TextCommandResult tcr = new TextCommandResult();
             tcr.Status = EnumCommandStatus.Success;
-            IServerPlayer player = args.Caller.Player as IServerPlayer;
-            if (player.WorldData.CurrentGameMode != EnumGameMode.Creative)
-            {
-                return tcr;
-            }
-            //effectname minutes tier targetname
-            if(args.RawArgs.Length < 4)
-            {
-                return tcr;
-            }
-            Instance.effects.TryGetValue(args.RawArgs[0], out Type effectType);
-            if(effectType == null)
-            {
-                return tcr;
-            }
-            int durationMin = 0;
-            try
-            {
-                durationMin = int.Parse(args.RawArgs[1]);
-            }
-            catch(FormatException e)
-            {
-                return tcr;
-            }
-            int tier = 1;
-            try
-            {
-                tier = int.Parse(args.RawArgs[2]);
-            }
-            catch (FormatException e)
-            {
-                return tcr;
-            }
 
-            foreach(var it in Instance.sapi.World.AllOnlinePlayers)
+            IServerPlayer player = args.Caller.Player as IServerPlayer;
+            if (player.WorldData.CurrentGameMode != EnumGameMode.Creative) return tcr;
+            if (args.RawArgs.Length < 4) return tcr;
+
+            ICoreServerAPI sapi = player.Entity.Api as ICoreServerAPI;
+            effectshud mod = sapi.ModLoader.GetModSystem<effectshud>();
+
+            mod.effects.TryGetValue(args.RawArgs[0], out Type effectType);
+            if (effectType == null) return tcr;
+
+            if (!int.TryParse(args.RawArgs[1], out int durationMin)) return tcr;
+            if (!int.TryParse(args.RawArgs[2], out int tier)) return tcr;
+
+            foreach (var it in sapi.World.AllOnlinePlayers)
             {
-                if(it.PlayerName.Equals(args.RawArgs[3]))
+                if (it.PlayerName.Equals(args.RawArgs[3]))
                 {
                     Effect ef = (Effect)Activator.CreateInstance(effectType);
                     ef.SetExpiryInRealMinutes(durationMin);
                     ef.Tier = tier;
-                    if(effectshud.Instance.effectsPosNeg.TryGetValue(ef.effectTypeId, out bool posneg))
-                    {
-                        ef.positive = posneg;
-                    }
-                    else
-                    {
-                        ef.positive = true;
-                    }
+                    ef.positive = mod.effectsPosNeg.TryGetValue(ef.effectTypeId, out bool posneg) ? posneg : true;
                     ApplyEffectOnEntity(it.Entity, ef);
                     tcr.StatusMessage = "effectshud:effect-set-to-player-tier-duration";
-                    tcr.MessageParams = new object[] {effectType.Name, it.PlayerName, tier, durationMin }; 
+                    tcr.MessageParams = new object[] { effectType.Name, it.PlayerName, tier, durationMin };
                     break;
                 }
             }
@@ -231,30 +169,30 @@ namespace effectshud.src
         }
         public override void StartServerSide(ICoreServerAPI api)
         {
-            sapi = api;            
+            ServerSideApi = api;            
              harmonyInstance = new Harmony(harmonyID);
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityBehaviorTemporalStabilityAffected).GetMethod("OnGameTick"), transpiler: new HarmonyMethod(typeof(TemporalChargePatch).GetMethod("Prefix_EntityBehaviorTemporalStabilityAffected")));
             // harmonyInstance.Patch(typeof(Vintagestory.API.Common.EntityAgent).GetMethod("ReceiveDamage"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_On_ReceiveDamage")));
+            serverChannel = ServerSideApi.Network.RegisterChannel("effectshud");
+            serverChannel.RegisterMessageType(typeof(EffectsSyncPacket));
+
             base.StartServerSide(api);
 
-            sapi.ChatCommands.Create("ef").HandleWith(addDefaultEffect)
+            ServerSideApi.ChatCommands.Create("ef").HandleWith(addDefaultEffect)
                .RequiresPlayer().RequiresPrivilege(Privilege.controlserver).IgnoreAdditionalArgs();
 
             api.RegisterEntityBehaviorClass("affectedByEffects", typeof(EBEffectsAffected));
-            //RegisterEntityEffect("vampirism", typeof(VampirismEffect));
-            serverChannel = sapi.Network.RegisterChannel("effectshud");
-            serverChannel.RegisterMessageType(typeof(EffectsSyncPacket));
             //api.Event.PlayerDisconnect += onPlayerLeft;
-            sapi.Event.PlayerNowPlaying += (serverPlayer) =>
+            ServerSideApi.Event.PlayerNowPlaying += (serverPlayer) =>
             {
-                sapi.Event.RegisterCallback((dt =>
+                ServerSideApi.Event.RegisterCallback((dt =>
                 {
                     EBEffectsAffected ebea = serverPlayer.Entity.GetBehavior<EBEffectsAffected>();
                     if (ebea == null)
                     {
                         return;
                     }
-                    ebea.SendActiveEffectsToClient(null);
+                    ebea.SendAllEffectsToClient();
                 }), 1000
                 );
             };
@@ -276,92 +214,69 @@ namespace effectshud.src
         public static bool ApplyEffectOnEntity(Entity entity, Effect effect)
         {
             EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
-            if(ebea == null)
-            {
-                return false;
-            }
+            if (ebea == null) return false;
             return ebea.AddEffect(effect);
+        }
+
+        public static bool ApplyEffectsOnEntity(Entity entity, IEnumerable<Effect> effects)
+        {
+            EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
+            if (ebea == null) return false;
+            ebea.AddEffects(effects);
+            return true;
         }
         private bool OnHotKeyEffectsSelectionGui(KeyCombination comb)
         {
-            if (effectsSelectionGui == null)
+            if (effectsSelectionGuiImGui == null)
             {
-                effectsSelectionGui = new EffectsSelectionGui(capi);
+                effectsSelectionGuiImGui = new EffectsSelectionGuiImGui(ClientSideApi);
             }
-            if (effectsSelectionGui.IsOpened())
+            if (effectsSelectionGuiImGui.IsOpened)
             {
-                effectsSelectionGui.TryClose();
+                effectsSelectionGuiImGui.Close();
             }
             else
-                effectsSelectionGui.TryOpen();
+            {
+                effectsSelectionGuiImGui.Open();
+            }
             return true;
         }
         private bool OnHotKeySkillDialog(KeyCombination comb)
         {
-            showHUD = !showHUD;
-            effectsHUD = null;
-            lock (capi.OpenedGuis)
+            if (effectsHUDImGui != null)
             {
-                foreach (var it in capi.OpenedGuis)
-                {
-                    if (it is HUDEffects && !showHUD)
-                    {
-                        (it as HUDEffects).TryClose();
-                        break;
-                    }
-                }
-                if (showHUD)
-                {
-                    effectsHUD = new HUDEffects(capi);
-                }
+                effectsHUDImGui.Dispose();
+                effectsHUDImGui = null;
             }
-            HudOffsetPatch.updateOffset();
-            return true;
-        }
-        public static bool RegisterEffect(string watchedBranch, string effectWatchedName, bool showTime, string effectDurationWatchedName, string [] domainAndPath, Vintagestory.API.Common.Func<int, bool> needToShow)
-        {
-            AssetLocation tmpAL;
-            AssetLocation [] tmpArr = new AssetLocation [domainAndPath.Length];
-            for (int i = 0; i < domainAndPath.Length; i++)
+            else
             {
-                try
-                {
-                    tmpAL = new AssetLocation(domainAndPath[i] + ".png");
-                    tmpArr[i] = tmpAL;
-                }
-                catch (Exception ex)
-                {
-                    return false;
-                }
+                effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
+                effectsHUDImGui.Open();
             }
-            Instance.trackedEffects.Add(new TrackedEffect(tmpArr, showTime, watchedBranch, effectWatchedName, effectDurationWatchedName, needToShow));
             return true;
         }
         public override void Dispose()
         {
             base.Dispose();
             harmonyInstance?.UnpatchAll(harmonyID);
-            sapi = null;
-            capi = null;
+            ClientSideApi = null;
+            ServerSideApi = null;
             harmonyInstance = null;
 
-            trackedEffects = null;
+
             effects = null;
 
             clientChannel = null;
-            clientsActiveEffects = null;
             effectsPosNeg = null;
             effectsShouldBeRendered = null;
             serverChannel = null;
 
             invisiblePlayers?.Clear();
             invisiblePlayers = null;
-            if (effectsSelectionGui != null)
-            {
-                effectsSelectionGui.TryClose();
-                effectsSelectionGui.Dispose();
-                effectsSelectionGui = null;
-            }
+            effectsSelectionGuiImGui?.Dispose();
+            effectsSelectionGuiImGui = null;
+            effectsHUDImGui?.Dispose();
+            effectsHUDImGui = null;
             Instance = null;
         }
         private void loadConfig(ICoreAPI api)
@@ -382,6 +297,6 @@ namespace effectshud.src
             api.StoreModConfig<Config>(config, "effectshud.json");
 
         }
-        public double Now { get { return sapi?.World.Calendar.TotalDays ?? 0; } }
+        public double Now { get { return ServerSideApi?.World.Calendar.TotalDays ?? 0; } }
     }
 }

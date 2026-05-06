@@ -25,5 +25,6 @@ namespace effectshud.src
         public const string Invisibility = "invisibility";
         public const string NightVision = "nightvision";
         public const string Vampirism = "vampirism";
+        public const string Poison = "poison";
     }
 }
