@@ -23,6 +23,26 @@
   "gui-type-tier": "Effect's tier",
   "gui-type-duration-minutes": "Duration(minutes)",
   "gui-apply": "Apply",
-  "effect-set-to-player-tier-duration": "Effect {0} applied on {1} with tier {2} for {3} minutes."
+  "effect-set-to-player-tier-duration": "Effect {0} applied on {1} with tier {2} for {3} minutes.",
+
+  "hud-settings-title": "HUD Settings",
+  "hud-settings-move-mode": "Move HUD",
+  "hud-settings-horizontal": "Horizontal",
+  "hud-settings-icon-size": "Icon size",
+  "hud-settings-bg-alpha": "Background alpha",
+  "hud-settings-icon-alpha": "Icon alpha",
+  "hud-settings-show-timer": "Show timer",
+  "hud-settings-reverse-order": "Reverse order",
+  "hud-settings-filter": "Filter:",
+  "hud-settings-filter-all": "All",
+  "hud-settings-filter-positive": "Positive",
+  "hud-settings-filter-negative": "Negative",
+  "hud-settings-sort": "Sort:",
+  "hud-settings-sort-default": "Default",
+  "hud-settings-sort-time-asc": "Time ↑",
+  "hud-settings-sort-time-desc": "Time ↓",
+  "hud-settings-grow-up": "Grow upward",
+  "hud-settings-grow-left": "Grow leftward",
+  "hud-settings-reset-position": "Reset position"
 
 }

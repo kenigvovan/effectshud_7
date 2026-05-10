@@ -21,6 +21,7 @@ namespace effectshud.src
         public static ConcurrentDictionary<string, byte> invisiblePlayers;
         public static EffectsSelectionGuiImGui effectsSelectionGuiImGui { get; set; }
         public HUDEffectsImGui effectsHUDImGui;
+        public HUDSettingsImGui hudSettingsImGui;
 
         public Harmony harmonyInstance;
         public Dictionary<string, Type> effects;
@@ -65,6 +66,9 @@ namespace effectshud.src
 
             api.Input.RegisterHotKey("effectsghudgui", "Gui effects selection", GlKeys.L, HotkeyType.GUIOrOtherControls, false, false, true);
             api.Input.SetHotKeyHandler("effectsghudgui", new ActionConsumable<KeyCombination>(this.OnHotKeyEffectsSelectionGui));
+
+            api.Input.RegisterHotKey("effectshudmove", "HUD Settings", GlKeys.L, HotkeyType.GUIOrOtherControls, true, false, false);
+            api.Input.SetHotKeyHandler("effectshudmove", new ActionConsumable<KeyCombination>(this.OnHotKeyHUDSettings));
 
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.GuiDialogWorldMap).GetMethod("OnGuiClosed"), postfix: new HarmonyMethod(typeof(HudOffsetPatch).GetMethod("Postfix_Map_OnGuiClosed")));
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.GuiDialogWorldMap).GetMethod("OnGuiOpened"), postfix: new HarmonyMethod(typeof(HudOffsetPatch).GetMethod("Postfix_Map_OnGuiOpened")));
@@ -241,6 +245,16 @@ namespace effectshud.src
             }
             return true;
         }
+        private bool OnHotKeyHUDSettings(KeyCombination comb)
+        {
+            if (hudSettingsImGui == null)
+                hudSettingsImGui = new HUDSettingsImGui(ClientSideApi);
+            if (hudSettingsImGui.IsOpened)
+                hudSettingsImGui.Close();
+            else
+                hudSettingsImGui.Open();
+            return true;
+        }
         private bool OnHotKeySkillDialog(KeyCombination comb)
         {
             if (effectsHUDImGui != null)
@@ -273,6 +287,8 @@ namespace effectshud.src
 
             invisiblePlayers?.Clear();
             invisiblePlayers = null;
+            hudSettingsImGui?.Dispose();
+            hudSettingsImGui = null;
             effectsSelectionGuiImGui?.Dispose();
             effectsSelectionGuiImGui = null;
             effectsHUDImGui?.Dispose();
