@@ -71,6 +71,13 @@ namespace effectshud.src.gui
                 changed = true;
             }
 
+            float timerScale = _config.HUD_TIMER_SCALE;
+            if (ImGui.SliderFloat(Lang.Get("effectshud:hud-settings-timer-scale"), ref timerScale, 0.5f, 3f))
+            {
+                _config.HUD_TIMER_SCALE = timerScale;
+                changed = true;
+            }
+
             bool reverseOrder = _config.HUD_REVERSE_ORDER;
             if (ImGui.Checkbox(Lang.Get("effectshud:hud-settings-reverse-order"), ref reverseOrder))
             {

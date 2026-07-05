@@ -38,5 +38,31 @@ namespace effectshud.src
             }
             return true;
         }
+
+        // Held items (weapon/tool in hand) are drawn by RenderHeldItem, called from DoRender3DOpaque — a separate
+        // path from the batched avatar mesh (which already includes worn armor/clothing and is hidden above). Without
+        // this they'd hang in the air on an invisible player. Hide them too.
+        public static bool Prefix_RenderHeldItem(EntityShapeRenderer __instance)
+        {
+            var uid = (__instance.entity as EntityPlayer)?.PlayerUID;
+            if (uid != null && effectshud.invisiblePlayers.ContainsKey(uid))
+            {
+                return false;
+            }
+            return true;
+        }
+
+        // The over-head name tag is drawn by EntityBehaviorNameTag.OnRenderFrame, separately from DoRender2D,
+        // so it would otherwise hang in the air over an invisible player. Hide it too. ___entity injects the
+        // behavior's protected 'entity' field.
+        public static bool Prefix_NameTag_OnRenderFrame(Entity ___entity)
+        {
+            var uid = (___entity as EntityPlayer)?.PlayerUID;
+            if (uid != null && effectshud.invisiblePlayers.ContainsKey(uid))
+            {
+                return false;
+            }
+            return true;
+        }
     }
 }

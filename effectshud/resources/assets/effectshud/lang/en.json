@@ -32,6 +32,7 @@
   "hud-settings-bg-alpha": "Background alpha",
   "hud-settings-icon-alpha": "Icon alpha",
   "hud-settings-show-timer": "Show timer",
+  "hud-settings-timer-scale": "Timer text size",
   "hud-settings-reverse-order": "Reverse order",
   "hud-settings-filter": "Filter:",
   "hud-settings-filter-all": "All",

@@ -9,6 +9,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Server;
+using Vintagestory.GameContent;
 
 namespace effectshud.src
 {
@@ -28,6 +29,9 @@ namespace effectshud.src
         internal IClientNetworkChannel clientChannel;
         public Dictionary<string, bool> effectsPosNeg;
         public Dictionary<string, bool> effectsShouldBeRendered;
+        /// <summary>Optional per-effect HUD icon override (any mod/domain). Falls back to
+        /// <c>effectshud:textures/effects/&lt;typeId&gt;.png</c> when absent.</summary>
+        public Dictionary<string, AssetLocation> effectIcons;
         internal IServerNetworkChannel serverChannel;
         public Config config;
         public override void Start(ICoreAPI api)
@@ -40,6 +44,7 @@ namespace effectshud.src
             }
             effectsPosNeg = new Dictionary<string, bool>();
             effectsShouldBeRendered = new Dictionary<string, bool>();
+            effectIcons = new Dictionary<string, AssetLocation>();
             invisiblePlayers = new ConcurrentDictionary<string, byte>();
             loadConfig(api);
             ScanAndRegisterEffects();
@@ -78,12 +83,23 @@ namespace effectshud.src
 
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityShapeRenderer).GetMethod("DoRender3DOpaqueBatched"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_DoRender3DOpaqueBatched")));
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityShapeRenderer).GetMethod("DoRender2D"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_DoRender2D")));
+            // Held items render via the player renderer's RenderHeldItem override (protected) — patch that exact
+            // method so held weapons/tools are hidden on invisible players too (the batched mesh patch misses them).
+            harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityPlayerShapeRenderer).GetMethod("RenderHeldItem", BindingFlags.Instance | BindingFlags.NonPublic), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_RenderHeldItem")));
+            harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityBehaviorNameTag).GetMethod("OnRenderFrame"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_NameTag_OnRenderFrame")));
             harmonyInstance.Patch(typeof(Vintagestory.Server.ServerPackets).GetMethod("GetFullEntityPacket"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_GetFullEntityPacket")));
             //harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntitySkinnableShapeRenderer).GetMethod("TesselateShape"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_TesselateShape")));
            
             api.RegisterEntityBehaviorClass("affectedByEffects", typeof(EBEffectsAffected));
             clientChannel = api.Network.RegisterChannel("effectshud");
             clientChannel.RegisterMessageType(typeof(EffectsSyncPacket));
+            clientChannel.RegisterMessageType(typeof(OpenCharSelPacket));
+            clientChannel.SetMessageHandler<OpenCharSelPacket>((packet) =>
+            {
+                var charSys = ClientSideApi.ModLoader.GetModSystem<CharacterSystem>();
+                if (charSys == null) return;
+                new GuiDialogCreateCharacter(ClientSideApi, charSys).PrepAndOpen();
+            });
             clientChannel.SetMessageHandler<EffectsSyncPacket>((packet) =>
             {
                 var player = ClientSideApi.World.PlayerByUid(packet.playerUID);
@@ -131,10 +147,23 @@ namespace effectshud.src
             effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
             effectsHUDImGui.Open();
         }
-        public static bool RegisterClientEffectData(string typeId, bool positive = true, bool shouldBeRendered = true)
+        public static bool RegisterClientEffectData(string typeId, bool positive = true, bool shouldBeRendered = true, AssetLocation icon = null)
         {
-            Instance.effectsPosNeg.Add(typeId, positive);
-            Instance.effectsShouldBeRendered.Add(typeId, shouldBeRendered);
+            // Indexer (not Add) so re-registration / both-sides registration doesn't throw on a duplicate key.
+            Instance.effectsPosNeg[typeId] = positive;
+            Instance.effectsShouldBeRendered[typeId] = shouldBeRendered;
+            if (icon != null) Instance.effectIcons[typeId] = icon;
+            return true;
+        }
+
+        /// <summary>One-call registration for consumer mods: registers the effect TYPE (so it can be created and
+        /// deserialized) plus its client HUD data (positive/negative, whether to render, and an optional custom icon
+        /// from any domain). Call from your mod's Start on both sides. Define the effect by subclassing
+        /// <see cref="effectshud.src.Effect"/> and overriding OnStart/OnExpire (set/clear your own stat key).</summary>
+        public static bool RegisterEffect(string typeId, Type effectType, bool positive = true, bool shouldBeRendered = true, AssetLocation icon = null)
+        {
+            Instance.effects[typeId] = effectType;
+            RegisterClientEffectData(typeId, positive, shouldBeRendered, icon);
             return true;
         }
         public static TextCommandResult addDefaultEffect(TextCommandCallingArgs args)
@@ -179,6 +208,7 @@ namespace effectshud.src
             // harmonyInstance.Patch(typeof(Vintagestory.API.Common.EntityAgent).GetMethod("ReceiveDamage"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_On_ReceiveDamage")));
             serverChannel = ServerSideApi.Network.RegisterChannel("effectshud");
             serverChannel.RegisterMessageType(typeof(EffectsSyncPacket));
+            serverChannel.RegisterMessageType(typeof(OpenCharSelPacket));
 
             base.StartServerSide(api);
 
@@ -191,12 +221,18 @@ namespace effectshud.src
             {
                 ServerSideApi.Event.RegisterCallback((dt =>
                 {
-                    EBEffectsAffected ebea = serverPlayer.Entity.GetBehavior<EBEffectsAffected>();
-                    if (ebea == null)
+                    EBEffectsAffected ebea = serverPlayer.Entity?.GetBehavior<EBEffectsAffected>();
+                    ebea?.SendAllEffectsToClient();
+
+                    // Catch the newcomer up on everyone ELSE who is currently invisible: the apply-time broadcast
+                    // fired before this player connected, so without this they'd render an already-invisible player.
+                    foreach (var other in ServerSideApi.World.AllOnlinePlayers)
                     {
-                        return;
+                        if (other == serverPlayer || other.Entity == null) continue;
+                        var oeb = other.Entity.GetBehavior<EBEffectsAffected>();
+                        if (oeb != null && oeb.HasEffect(EffectTypeIds.Invisibility))
+                            oeb.SendAllEffectsToPlayer(serverPlayer as IServerPlayer);
                     }
-                    ebea.SendAllEffectsToClient();
                 }), 1000
                 );
             };
@@ -283,6 +319,7 @@ namespace effectshud.src
             clientChannel = null;
             effectsPosNeg = null;
             effectsShouldBeRendered = null;
+            effectIcons = null;
             serverChannel = null;
 
             invisiblePlayers?.Clear();

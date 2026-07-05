@@ -23,7 +23,7 @@ namespace effectshud.src
         public double ExpireTimestampInDays = 0;
         public bool infinite = false;
         public bool positive = true;
-        internal Entity entity;
+        protected internal Entity entity; // protected so effect subclasses in OTHER mods can use it in OnStart/OnExpire/OnTick
         public string effectTypeId;
         public bool removedAfterDeath = true;
                               
@@ -53,8 +53,14 @@ namespace effectshud.src
             }
             if(this.tier == otherEffect.tier)
             {
-                this.ExpireTick = otherEffect.ExpireTick;
-                this.TickCounter = otherEffect.TickCounter;              
+                // Refresh, but never SHORTEN: keep whichever has more time left. Remaining = ExpireTick - TickCounter
+                // (both relative to the same tick cadence). Otherwise a short re-application (e.g. a 2s invisibility
+                // from a blink) would cut an already-running long one (e.g. a 40s stealth).
+                if (otherEffect.ExpireTick - otherEffect.TickCounter > this.ExpireTick - this.TickCounter)
+                {
+                    this.ExpireTick = otherEffect.ExpireTick;
+                    this.TickCounter = otherEffect.TickCounter;
+                }
                 return;
             }
             this.tier = otherEffect.tier;

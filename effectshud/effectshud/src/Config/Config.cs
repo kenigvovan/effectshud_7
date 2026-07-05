@@ -16,5 +16,6 @@
         public bool HUD_REVERSE_ORDER = false;
         public bool HUD_GROW_UP = false;
         public bool HUD_GROW_LEFT = false;
+        public float HUD_TIMER_SCALE = 1.5f;
     }
 }
