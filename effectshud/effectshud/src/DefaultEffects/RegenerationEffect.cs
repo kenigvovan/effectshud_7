@@ -13,20 +13,18 @@ namespace effectshud.src.DefaultEffects
         public RegenerationEffect(int ticks = 20, float hpPerTick = 0.08f, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInTicks(ticks);
-            this.hpPerTick = hpPerTick * tier;
+            // Store the BASE value; tier is applied once in OnTick. Multiplying here too made healing scale
+            // with tier squared (0.08 * tier in the ctor, then * tier again per tick).
+            this.hpPerTick = hpPerTick;
         }
         public override void OnTick()
-        {           
+        {
             entity.ReceiveDamage(new DamageSource
             {
                 Source = EnumDamageSource.Internal,
                 Type = EnumDamageType.Heal
             }, hpPerTick * tier);
         }
-        public override void OnStack(Effect otherEffect)
-        {
-            base.OnStack(otherEffect);
-        }
-       
+
     }
 }

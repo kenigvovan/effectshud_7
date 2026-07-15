@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -19,7 +18,6 @@ namespace effectshud.src
         public static ICoreClientAPI ClientSideApi { get; private set; }
         public static ICoreServerAPI ServerSideApi { get; private set; }
         public const string harmonyID = "effectshud.Patches";
-        public static ConcurrentDictionary<string, byte> invisiblePlayers;
         public static EffectsSelectionGuiImGui effectsSelectionGuiImGui { get; set; }
         public HUDEffectsImGui effectsHUDImGui;
         public HUDSettingsImGui hudSettingsImGui;
@@ -45,7 +43,6 @@ namespace effectshud.src
             effectsPosNeg = new Dictionary<string, bool>();
             effectsShouldBeRendered = new Dictionary<string, bool>();
             effectIcons = new Dictionary<string, AssetLocation>();
-            invisiblePlayers = new ConcurrentDictionary<string, byte>();
             loadConfig(api);
             ScanAndRegisterEffects();
         }
@@ -87,7 +84,6 @@ namespace effectshud.src
             // method so held weapons/tools are hidden on invisible players too (the batched mesh patch misses them).
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityPlayerShapeRenderer).GetMethod("RenderHeldItem", BindingFlags.Instance | BindingFlags.NonPublic), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_RenderHeldItem")));
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityBehaviorNameTag).GetMethod("OnRenderFrame"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_NameTag_OnRenderFrame")));
-            harmonyInstance.Patch(typeof(Vintagestory.Server.ServerPackets).GetMethod("GetFullEntityPacket"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_GetFullEntityPacket")));
             //harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntitySkinnableShapeRenderer).GetMethod("TesselateShape"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_TesselateShape")));
            
             api.RegisterEntityBehaviorClass("affectedByEffects", typeof(EBEffectsAffected));
@@ -112,9 +108,6 @@ namespace effectshud.src
                         {
                             foreach (var it in packet.effectsToAddOrUpdate)
                             {
-                                if (it.typeId.Equals(EffectTypeIds.Invisibility))
-                                    invisiblePlayers.TryAdd(packet.playerUID, 0);
-
                                 if (ebef.onlyClientsActiveEffects.TryGetValue(it.typeId, out EffectClientData ecd))
                                 {
                                     ecd.tier = it.tier;
@@ -131,9 +124,6 @@ namespace effectshud.src
                         }
                         if (packet.typeIdsToRemove != null)
                         {
-                            if (packet.typeIdsToRemove.Contains(EffectTypeIds.Invisibility))
-                                invisiblePlayers.TryRemove(packet.playerUID, out _);
-
                             foreach (var effToRemove in packet.typeIdsToRemove.ToArray())
                             {
                                 ebef.onlyClientsActiveEffects.Remove(effToRemove);
@@ -146,6 +136,20 @@ namespace effectshud.src
 
             effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
             effectsHUDImGui.Open();
+
+            // TEMP diagnostic: ".efinvis" prints the invisibility render flag of every loaded player entity,
+            // to verify the WatchedAttributes flag actually reached this client. Remove once invis sync is confirmed.
+            api.ChatCommands.Create("efinvis").HandleWith((args) =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var ent in ClientSideApi.World.LoadedEntities.Values)
+                {
+                    if (!(ent is EntityPlayer eplr)) continue;
+                    sb.AppendLine($"{eplr.GetName()} (id {ent.EntityId}): {ent.WatchedAttributes.GetBool(DefaultEffects.InvisibilityEffect.InvisibleAttr)}");
+                }
+                if (sb.Length == 0) sb.Append("no player entities loaded");
+                return TextCommandResult.Success(sb.ToString());
+            });
         }
         public static bool RegisterClientEffectData(string typeId, bool positive = true, bool shouldBeRendered = true, AssetLocation icon = null)
         {
@@ -205,6 +209,8 @@ namespace effectshud.src
             ServerSideApi = api;            
              harmonyInstance = new Harmony(harmonyID);
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.EntityBehaviorTemporalStabilityAffected).GetMethod("OnGameTick"), transpiler: new HarmonyMethod(typeof(TemporalChargePatch).GetMethod("Prefix_EntityBehaviorTemporalStabilityAffected")));
+            // Attach the effects behavior to all living mobs at runtime so effects work on them (server-only mechanic).
+            harmonyInstance.Patch(typeof(Vintagestory.API.Common.Entities.Entity).GetMethod("Initialize"), postfix: new HarmonyMethod(typeof(AttachEffectsBehaviorPatch).GetMethod("Postfix_Initialize")));
             // harmonyInstance.Patch(typeof(Vintagestory.API.Common.EntityAgent).GetMethod("ReceiveDamage"), prefix: new HarmonyMethod(typeof(InvisibilityRenderPatch).GetMethod("Prefix_On_ReceiveDamage")));
             serverChannel = ServerSideApi.Network.RegisterChannel("effectshud");
             serverChannel.RegisterMessageType(typeof(EffectsSyncPacket));
@@ -219,20 +225,12 @@ namespace effectshud.src
             //api.Event.PlayerDisconnect += onPlayerLeft;
             ServerSideApi.Event.PlayerNowPlaying += (serverPlayer) =>
             {
+                // Own-HUD catch-up only. Invisibility of OTHERS needs no catch-up: it lives in the entity's
+                // WatchedAttributes, which the engine syncs to every client that sees the entity.
                 ServerSideApi.Event.RegisterCallback((dt =>
                 {
                     EBEffectsAffected ebea = serverPlayer.Entity?.GetBehavior<EBEffectsAffected>();
                     ebea?.SendAllEffectsToClient();
-
-                    // Catch the newcomer up on everyone ELSE who is currently invisible: the apply-time broadcast
-                    // fired before this player connected, so without this they'd render an already-invisible player.
-                    foreach (var other in ServerSideApi.World.AllOnlinePlayers)
-                    {
-                        if (other == serverPlayer || other.Entity == null) continue;
-                        var oeb = other.Entity.GetBehavior<EBEffectsAffected>();
-                        if (oeb != null && oeb.HasEffect(EffectTypeIds.Invisibility))
-                            oeb.SendAllEffectsToPlayer(serverPlayer as IServerPlayer);
-                    }
                 }), 1000
                 );
             };
@@ -322,8 +320,6 @@ namespace effectshud.src
             effectIcons = null;
             serverChannel = null;
 
-            invisiblePlayers?.Clear();
-            invisiblePlayers = null;
             hudSettingsImGui?.Dispose();
             hudSettingsImGui = null;
             effectsSelectionGuiImGui?.Dispose();

@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using effectshud.src.DefaultEffects;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -81,7 +82,14 @@ namespace effectshud.src
             {
                 deserialize();
             }
-            entity.GetBehavior<EntityBehaviorHealth>().onDamaged += OnShouldEntityReceiveDamage;
+            // Reconcile the invisibility render flag with the actual effect state: OnStart never runs for effects
+            // restored by deserialize (and never ran at all for saves from before the flag existed), and this also
+            // clears a stale flag left behind if the effect vanished without OnExpire.
+            bool invis = HasEffect(EffectTypeIds.Invisibility);
+            if (entity.WatchedAttributes.GetBool(InvisibilityEffect.InvisibleAttr) != invis)
+                entity.WatchedAttributes.SetBool(InvisibilityEffect.InvisibleAttr, invis);
+            var health = entity.GetBehavior<EntityBehaviorHealth>();
+            if (health != null) health.onDamaged += OnShouldEntityReceiveDamage;
             //SendAllEffectsToClient();
 
         }
@@ -219,25 +227,11 @@ namespace effectshud.src
             }
         }
 
+        // Effect sync goes only to the bearer (for his HUD). Invisibility visibility for OTHER clients is not
+        // packet-based anymore: it's a WatchedAttributes flag the engine syncs to everyone who sees the entity.
         private void SendPacket(EffectsSyncPacket packet, IServerPlayer ownerPlayer)
         {
             Mod.serverChannel.SendPacket(packet, ownerPlayer);
-
-            // Invisibility must be mirrored to NEARBY clients too (they own the render-hide via invisiblePlayers),
-            // not just the bearer. This fires on BOTH apply (effect in effectsToAddOrUpdate) and removal
-            // (typeIdsToRemove) — previously only removal was broadcast, so others never hid a freshly-invisible
-            // player and kept rendering him while he was invisible to himself.
-            bool affectsInvisibility =
-                packet.typeIdsToRemove?.Contains(EffectTypeIds.Invisibility) == true
-                || packet.effectsToAddOrUpdate?.Any(e => e.typeId == EffectTypeIds.Invisibility) == true;
-            if (affectsInvisibility && effectshud.ServerSideApi != null)
-            {
-                foreach (var it in effectshud.ServerSideApi.World.GetPlayersAround(entity.ServerPos.XYZ, 128, 128))
-                {
-                    if (it != ownerPlayer)
-                        Mod.serverChannel.SendPacket(packet, it as IServerPlayer);
-                }
-            }
         }
 
         public void SendAllEffectsToClient()
@@ -254,25 +248,6 @@ namespace effectshud.src
                 playerUID = ownerPlayer.PlayerUID,
                 effectsToAddOrUpdate = effectData
             }, ownerPlayer);
-        }
-
-        /// <summary>Sends this entity's full effect list to ONE specific client. Used to catch a player up on
-        /// already-active effects of others (e.g. an existing invisibility) right after they join — the normal
-        /// apply-time broadcast happened before they were connected, so they'd otherwise render an invisible player.</summary>
-        public void SendAllEffectsToPlayer(IServerPlayer recipient)
-        {
-            var ownerPlayer = (entity as EntityPlayer)?.Player as IServerPlayer;
-            if (ownerPlayer == null || recipient == null) return;
-
-            var effectData = new List<EffectClientData>();
-            foreach (var it in activeEffects.Values)
-                effectData.Add(CreateEffectClientData(it));
-
-            Mod.serverChannel.SendPacket(new EffectsSyncPacket
-            {
-                playerUID = ownerPlayer.PlayerUID,
-                effectsToAddOrUpdate = effectData
-            }, recipient);
         }
 
         public void SendEffectToClient(Effect ef, HashSet<string> typeIdsToRemove = null)

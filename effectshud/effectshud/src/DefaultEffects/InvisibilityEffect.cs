@@ -22,6 +22,11 @@ namespace effectshud.src.DefaultEffects
         private const string StatCode = "effectshud_invisibility";
         private const float AggroDropRadius = 20f;
 
+        /// <summary>WatchedAttributes flag the render patches check. Set server-side; the engine syncs it to every
+        /// client that sees the entity (full entity packet on enter-range + partial updates), so nobody keeps a
+        /// stale invisibility no matter how far away they were when it was applied or removed.</summary>
+        public const string InvisibleAttr = "efhudInvisible";
+
         /// <summary>If true, the bearer attacking in melee ends the invisibility. Set per-application.</summary>
         public bool BreakOnAttack = true;
 
@@ -32,7 +37,16 @@ namespace effectshud.src.DefaultEffects
             base.OnStart();
             if (!IsServer || entity == null) return;
             entity.Stats.Set("animalSeekingRange", StatCode, -1f); // mobs effectively can't notice you
+            entity.WatchedAttributes.SetBool(InvisibleAttr, true); // SetBool marks the path dirty -> auto-synced
             DropAggroOnSelf();
+        }
+
+        /// <summary>Re-applying on top of an active invisibility routes through OnStack, not OnStart — keep the
+        /// render flag set on that path too (it stays true; invisibility continues either way).</summary>
+        public override void OnStack(Effect otherEffect)
+        {
+            base.OnStack(otherEffect);
+            if (IsServer && entity != null) entity.WatchedAttributes.SetBool(InvisibleAttr, true);
         }
 
         public override void OnExpire() => ClearStat();
@@ -54,7 +68,9 @@ namespace effectshud.src.DefaultEffects
 
         private void ClearStat()
         {
-            if (IsServer) entity?.Stats.Remove("animalSeekingRange", StatCode);
+            if (!IsServer || entity == null) return;
+            entity.Stats.Remove("animalSeekingRange", StatCode);
+            entity.WatchedAttributes.SetBool(InvisibleAttr, false);
         }
 
         /// <summary>Stops only the combat tasks of nearby mobs that are currently targeting THIS bearer —
