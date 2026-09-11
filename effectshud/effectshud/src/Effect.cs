@@ -43,6 +43,12 @@ namespace effectshud.src
                 }
             }
         }
+        /// <summary>Optional numeric magnitude for a consumer mod's UI (e.g. damage per tick, a DR/reflect fraction).
+        /// Synced to the client in <see cref="EffectClientData.magnitude"/>. Default 0 = "no meaningful number".
+        /// A METHOD (not a property) on purpose: effects are (de)serialized by Newtonsoft with public members, and a
+        /// method is ignored — a get-only property would be written to the effect's saved JSON.</summary>
+        public virtual float DisplayMagnitude() => 0f;
+
         public virtual void OnStart() { }
         
         public virtual void OnStack(Effect otherEffect) 

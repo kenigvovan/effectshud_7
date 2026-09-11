@@ -32,6 +32,15 @@ namespace effectshud.src
         public Dictionary<string, AssetLocation> effectIcons;
         internal IServerNetworkChannel serverChannel;
         public Config config;
+
+        /// <summary>Consumer-contributed sections shown on the character-dialog "Effects" tab, above the effect list.
+        /// See <see cref="ICharacterSheetSection"/>. Read live at render time, so registration order/timing is free.</summary>
+        public List<ICharacterSheetSection> characterSheetSections;
+        /// <summary>Optional per-effect display-name resolver (typeId → localized name), for consumer effect ids.
+        /// The tab tries this first, then the <c>effectshud:&lt;typeId&gt;</c> lang key, then a humanized fallback.</summary>
+        public Dictionary<string, Func<string>> effectDisplayNames;
+        /// <summary>Optional override for the character tab's title (else <c>effectshud:charactertab-title</c>).</summary>
+        public Func<string> characterTabTitle;
         public override void Start(ICoreAPI api)
         {
             base.Start(api);
@@ -43,6 +52,8 @@ namespace effectshud.src
             effectsPosNeg = new Dictionary<string, bool>();
             effectsShouldBeRendered = new Dictionary<string, bool>();
             effectIcons = new Dictionary<string, AssetLocation>();
+            characterSheetSections = new List<ICharacterSheetSection>();
+            effectDisplayNames = new Dictionary<string, Func<string>>();
             loadConfig(api);
             ScanAndRegisterEffects();
         }
@@ -170,6 +181,27 @@ namespace effectshud.src
             RegisterClientEffectData(typeId, positive, shouldBeRendered, icon);
             return true;
         }
+        /// <summary>Register a section for the character-dialog "Effects" tab (rendered above the effect list).
+        /// Call from your mod's client start. Safe to call before the tab exists — sections are read live.</summary>
+        public static void RegisterCharacterSheetSection(ICharacterSheetSection section)
+        {
+            if (section != null) Instance?.characterSheetSections?.Add(section);
+        }
+
+        /// <summary>Register a localized display name for one effect typeId, used by the character tab's effect list
+        /// (and available to any effectshud UI). The provider is a callback so it can re-localize on language change.</summary>
+        public static void RegisterEffectDisplayName(string typeId, Func<string> localizedName)
+        {
+            if (!string.IsNullOrEmpty(typeId) && localizedName != null && Instance?.effectDisplayNames != null)
+                Instance.effectDisplayNames[typeId] = localizedName;
+        }
+
+        /// <summary>Override the character tab's title (defaults to lang key <c>effectshud:charactertab-title</c>).</summary>
+        public static void SetCharacterTabTitle(Func<string> title)
+        {
+            if (Instance != null) Instance.characterTabTitle = title;
+        }
+
         public static TextCommandResult addDefaultEffect(TextCommandCallingArgs args)
         {
             TextCommandResult tcr = new TextCommandResult();
@@ -318,6 +350,9 @@ namespace effectshud.src
             effectsPosNeg = null;
             effectsShouldBeRendered = null;
             effectIcons = null;
+            characterSheetSections = null;
+            effectDisplayNames = null;
+            characterTabTitle = null;
             serverChannel = null;
 
             hudSettingsImGui?.Dispose();

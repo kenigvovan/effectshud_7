@@ -214,7 +214,8 @@ namespace effectshud.src
                 duration = remainingSeconds,
                 tier = effect.Tier,
                 infinite = effect.infinite,
-                positive = effect.positive
+                positive = effect.positive,
+                magnitude = effect.DisplayMagnitude()
             };
         }
 

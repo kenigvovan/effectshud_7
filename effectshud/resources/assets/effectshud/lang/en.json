@@ -1,5 +1,11 @@
 ﻿{
   "effects-selection-gui-title-bar": "Effects selection",
+
+  "charactertab-title": "Effects",
+  "sheet-effects-header": "Active effects:",
+  "sheet-no-effects": "  (none)",
+  "sheet-effect-permanent": "permanent",
+
   "walkspeed": "Walks acceleration",
   "regeneration": "Regeneration",
   "miningslow": "Mining slow",
