@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.WeakMelee, positive: false)]
     public class WeakMeleeEffect : Effect
     {
         public float statChangeValue = -0.25f;
         public WeakMeleeEffect()
         {
-            effectTypeId = "weakmelee";
         }
         public WeakMeleeEffect(int tier = 1, float statChangeValue = -0.25f, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInRealMinutes(1 * tier);
             this.statChangeValue = statChangeValue;
-            effectTypeId = "weakmelee";
         }
         public override void OnStart()
         {

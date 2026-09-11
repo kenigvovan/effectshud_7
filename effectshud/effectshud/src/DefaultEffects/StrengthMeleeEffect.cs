@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.StrengthMelee)]
     public class StrengthMeleeEffect : Effect
     {
         public float statChangeValue = 0.25f;
         public StrengthMeleeEffect()
         {
-            effectTypeId = "strengthmelee";
         }
         public StrengthMeleeEffect(int tier = 1, float statChangeValue = 0.25f,  bool infinite = false) : base(tier, infinite)
         {
            // SetExpiryInRealMinutes(1 * tier);
             this.statChangeValue = statChangeValue;
-            effectTypeId = "strengthmelee";
         }
         public override void OnStart()
         {

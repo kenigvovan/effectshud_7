@@ -1,19 +1,19 @@
 ﻿using Vintagestory.API.Common;
+using effectshud.src;
 
 namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.Thorns)]
     public class ThornsEffect : Effect
     {
         public float thornDamage = 0.1f;
         public ThornsEffect()
         {
-            effectTypeId = "thorns";
         }
         public ThornsEffect(int secondsDuration = 60, float hpPerAttack = 0.09f, int tier = 1, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInRealSeconds(secondsDuration);
             this.thornDamage = hpPerAttack * tier;
-            effectTypeId = "thorns";
         }
         public override void OnShouldEntityReceiveDamage(ref float damage, DamageSource dmgSource)
         {

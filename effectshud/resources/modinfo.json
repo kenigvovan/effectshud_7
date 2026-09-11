@@ -4,8 +4,9 @@
   "name": "effectshud",
     "authors": [ "KenigVovan" ],
   "description": "Add different potion effects",
-  "version": "0.3.0",
+  "version": "0.3.6",
   "dependencies": {
-    "game": ""
+    "game": "",
+    "vsimgui": ""
   }
 }

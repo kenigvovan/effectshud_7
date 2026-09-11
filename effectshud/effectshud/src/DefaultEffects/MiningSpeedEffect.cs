@@ -1,17 +1,18 @@
-﻿namespace effectshud.src.DefaultEffects
+﻿using effectshud.src;
+
+namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.MiningSpeed)]
     public class MiningSpeedEffect : Effect
     {
         public float statChangeValue = 0.25f;
         public MiningSpeedEffect()
         {
-            effectTypeId = "miningspeed";
         }
         public MiningSpeedEffect(int tier = 1, float statChangeValue = 0.25f, bool infinite = false) : base(tier, infinite)
         {
             SetExpiryInRealMinutes(1 * tier);
             this.statChangeValue = statChangeValue;
-            effectTypeId = "miningspeed";
         }
         public override void OnStart()
         {
