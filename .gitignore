@@ -362,3 +362,8 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /effectshud/MODPAGE.html
+
+# Internal notes
+/effectshud/IMPROVEMENTS.md
+/effectshud/EFFECT_IDEAS.md
+/effectshud/effectshud/PLAN_3.md
