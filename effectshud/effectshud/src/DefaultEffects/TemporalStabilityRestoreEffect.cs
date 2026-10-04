@@ -1,17 +1,16 @@
 ﻿using Vintagestory.GameContent;
+using effectshud.src;
 
 namespace effectshud.src.DefaultEffects
 {
+    [EffectRegistration(EffectTypeIds.TemporalStabilityRestore, shouldBeRendered: false)]
     public class TemporalStabilityRestoreEffect: Effect
     {
         public TemporalStabilityRestoreEffect()
         {
-            effectTypeId = "temporalstabilityrestore";
         }
-        public TemporalStabilityRestoreEffect(int tier = 1)
+        public TemporalStabilityRestoreEffect(int tier = 1) : base(tier)
         {
-            this.effectTypeId = "temporalstabilityrestore";
-            this.tier = tier;
         }
         public override void OnStart()
         {

@@ -4,8 +4,9 @@
   "name": "EffectsHUD",
   "authors": [ "KenigVovan" ],
   "description": "Status effects (buffs and debuffs) for players with an on-screen HUD and an API for other mods.",
-  "version": "0.3.0",
+  "version": "0.3.6",
   "dependencies": {
-    "game": ""
+    "game": "",
+    "vsimgui": ""
   }
 }

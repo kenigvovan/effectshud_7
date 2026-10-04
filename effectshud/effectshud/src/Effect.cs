@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection;
 using ProtoBuf;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
@@ -22,7 +23,7 @@ namespace effectshud.src
         public double ExpireTimestampInDays = 0;
         public bool infinite = false;
         public bool positive = true;
-        internal Entity entity;
+        protected internal Entity entity; // protected so effect subclasses in OTHER mods can use it in OnStart/OnExpire/OnTick
         public string effectTypeId;
         public bool removedAfterDeath = true;
                               
@@ -31,7 +32,23 @@ namespace effectshud.src
             this.tier = tier;
             this.infinite = infinite;
             this.removedAfterDeath = removedAfterDeath;
+
+            // Auto-set effectTypeId from attribute if not already set
+            if (string.IsNullOrEmpty(effectTypeId))
+            {
+                var attr = GetType().GetCustomAttribute<EffectRegistrationAttribute>();
+                if (attr != null)
+                {
+                    effectTypeId = attr.TypeId;
+                }
+            }
         }
+        /// <summary>Optional numeric magnitude for a consumer mod's UI (e.g. damage per tick, a DR/reflect fraction).
+        /// Synced to the client in <see cref="EffectClientData.magnitude"/>. Default 0 = "no meaningful number".
+        /// A METHOD (not a property) on purpose: effects are (de)serialized by Newtonsoft with public members, and a
+        /// method is ignored — a get-only property would be written to the effect's saved JSON.</summary>
+        public virtual float DisplayMagnitude() => 0f;
+
         public virtual void OnStart() { }
         
         public virtual void OnStack(Effect otherEffect) 
@@ -42,8 +59,14 @@ namespace effectshud.src
             }
             if(this.tier == otherEffect.tier)
             {
-                this.ExpireTick = otherEffect.ExpireTick;
-                this.TickCounter = otherEffect.TickCounter;              
+                // Refresh, but never SHORTEN: keep whichever has more time left. Remaining = ExpireTick - TickCounter
+                // (both relative to the same tick cadence). Otherwise a short re-application (e.g. a 2s invisibility
+                // from a blink) would cut an already-running long one (e.g. a 40s stealth).
+                if (otherEffect.ExpireTick - otherEffect.TickCounter > this.ExpireTick - this.TickCounter)
+                {
+                    this.ExpireTick = otherEffect.ExpireTick;
+                    this.TickCounter = otherEffect.TickCounter;
+                }
                 return;
             }
             this.tier = otherEffect.tier;
@@ -62,19 +85,19 @@ namespace effectshud.src
       
         public void SetExpiryInGameDays(double deltaDays)
         {
-            ExpireTimestampInDays = effectshud.Now + deltaDays;
+            ExpireTimestampInDays = effectshud.Instance.Now + deltaDays;
             ExpireTick = Int32.MaxValue;
         }
 
         public void SetExpiryInGameHours(double deltaHours)
         {
-            ExpireTimestampInDays = effectshud.Now + deltaHours / 24.0;
+            ExpireTimestampInDays = effectshud.Instance.Now + deltaHours / 24.0;
             ExpireTick = Int32.MaxValue;
         }
 
         public void SetExpiryInGameMinutes(double deltaMinutes)
         {
-            ExpireTimestampInDays = effectshud.Now + deltaMinutes / 24.0 / 60.0;
+            ExpireTimestampInDays = effectshud.Instance.Now + deltaMinutes / 24.0 / 60.0;
             ExpireTick = Int32.MaxValue;
         }
 
@@ -86,7 +109,7 @@ namespace effectshud.src
 
         public void SetExpiryInRealSeconds(int deltaSeconds)
         {
-            SetExpiryInTicks((int)Math.Ceiling(deltaSeconds / effectshud.config.TICK_EVERY_SECONDS));
+            SetExpiryInTicks((int)Math.Ceiling(deltaSeconds / effectshud.Instance.config.TICK_EVERY_SECONDS));
         }
 
         public void SetExpiryInRealMinutes(int deltaMinutes)
