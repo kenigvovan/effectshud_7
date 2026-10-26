@@ -51,7 +51,10 @@ namespace effectshud.src
 
         public virtual void OnStart() { }
         
-        public virtual void OnStack(Effect otherEffect) 
+        /// <summary>Called on the ACTIVE effect when another one of the same type is applied. A higher tier replaces
+        /// tier and timing; the same tier refreshes timing but never shortens it; a lower tier is ignored.
+        /// Subclasses that hold tier-dependent state should call base and then re-apply that state.</summary>
+        public virtual void OnStack(Effect otherEffect)
         {
             if(this.tier > otherEffect.tier)
             {
@@ -59,19 +62,37 @@ namespace effectshud.src
             }
             if(this.tier == otherEffect.tier)
             {
-                // Refresh, but never SHORTEN: keep whichever has more time left. Remaining = ExpireTick - TickCounter
-                // (both relative to the same tick cadence). Otherwise a short re-application (e.g. a 2s invisibility
-                // from a blink) would cut an already-running long one (e.g. a 40s stealth).
-                if (otherEffect.ExpireTick - otherEffect.TickCounter > this.ExpireTick - this.TickCounter)
+                // Refresh, but never SHORTEN: keep whichever has more time left. Otherwise a short re-application
+                // (e.g. a 2s invisibility from a blink) would cut an already-running long one (e.g. a 40s stealth).
+                if (otherEffect.RemainingSeconds() > this.RemainingSeconds())
                 {
-                    this.ExpireTick = otherEffect.ExpireTick;
-                    this.TickCounter = otherEffect.TickCounter;
+                    CopyTimingFrom(otherEffect);
                 }
                 return;
             }
             this.tier = otherEffect.tier;
+            CopyTimingFrom(otherEffect);
+        }
+
+        /// <summary>Real seconds left, for both tick-based and game-time-based expiry. +Infinity for infinite effects.</summary>
+        public double RemainingSeconds()
+        {
+            if (infinite) return double.PositiveInfinity;
+            if (double.IsPositiveInfinity(ExpireTimestampInDays))
+            {
+                return (ExpireTick - TickCounter) * effectshud.Instance.config.TICK_EVERY_SECONDS;
+            }
+            var cal = entity?.World?.Calendar ?? effectshud.ServerSideApi?.World?.Calendar;
+            if (cal == null) return 0;
+            return (ExpireTimestampInDays - cal.TotalDays) * 86400.0 / (cal.SpeedOfTime * cal.CalendarSpeedMul);
+        }
+
+        protected void CopyTimingFrom(Effect otherEffect)
+        {
             this.ExpireTick = otherEffect.ExpireTick;
-            this.TickCounter = otherEffect.TickCounter;          
+            this.TickCounter = otherEffect.TickCounter;
+            this.ExpireTimestampInDays = otherEffect.ExpireTimestampInDays;
+            this.infinite = otherEffect.infinite;
         }
        
         public virtual void OnExpire() { }
@@ -117,35 +138,21 @@ namespace effectshud.src
             SetExpiryInRealSeconds(deltaMinutes * 60);
         }
 
-        /*public void SetExpiryNever()
+        public void SetExpiryNever()
         {
+            infinite = true;
             ExpireTimestampInDays = double.PositiveInfinity;
             ExpireTick = Int32.MaxValue;
-        }*/
+        }
 
         public void SetExpiryImmediately()
         {
+            infinite = false;
             ExpireTimestampInDays = 0;
         }
         
-        public void Apply(Entity entity)
-        {
-            if(entity == null)
-            {
-                throw new Exception("Target entity for effect is null");
-            }
-            EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
-            if(ebea == null)
-            {
-                return;
-            }
-        }
-     
-        public void Remove()
-        {
-            
-           // BuffManager.RemoveBuff(entity, this)
-        }
+        /// <summary>Removes the effect on death (if <see cref="removedAfterDeath"/>), calling <see cref="OnExpire"/>
+        /// so stat modifiers are cleared. Returns true if the effect was removed.</summary>
         public virtual bool OnDeath()
         {
             EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
@@ -155,6 +162,7 @@ namespace effectshud.src
             }
             if (this.removedAfterDeath)
             {
+                OnExpire();
                 ebea.activeEffects.Remove(this.effectTypeId);
                 ebea.needUpdate = true;
                 return true;
@@ -173,6 +181,12 @@ namespace effectshud.src
         public virtual void DidAttack(DamageSource source, EntityAgent targetEntity, ref EnumHandling handled)
         {
 
+        }
+
+        /// <summary>Called on the ATTACKER's effects after a target with effects support takes <paramref name="damage"/>
+        /// (final amount, after the target's own effects) caused by this effect's bearer. Server side only.</summary>
+        public virtual void OnDealtDamage(float damage, Entity target, DamageSource dmgSource)
+        {
         }
     }
 }

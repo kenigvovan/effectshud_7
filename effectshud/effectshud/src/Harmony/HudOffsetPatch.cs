@@ -60,19 +60,19 @@ namespace effectshud.src
 
                 if (startPointCoords != -1 && startPointMap != -1)
                 {
-                    HUDEffectsImGui.glOffset = (int)(startPointCoords + startPointMap) + 32;
+                    HUDEffects.glOffset = (int)(startPointCoords + startPointMap) + 32;
                 }
                 else if (startPointCoords != -1)
                 {
-                    HUDEffectsImGui.glOffset = (int)(startPointCoords) + 32;
+                    HUDEffects.glOffset = (int)(startPointCoords) + 32;
                 }
                 else if (startPointMap != -1)
                 {
-                    HUDEffectsImGui.glOffset = (int)(startPointMap) + 32;
+                    HUDEffects.glOffset = (int)(startPointMap) + 32;
                 }
                 else
                 {
-                    HUDEffectsImGui.glOffset = 64;
+                    HUDEffects.glOffset = 64;
                 }
             }
         }

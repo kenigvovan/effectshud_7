@@ -12,9 +12,5 @@ namespace effectshud.src.DefaultEffects
         {
             SetExpiryInRealMinutes(tier);
         }
-        public override void OnStack(Effect otherEffect)
-        {
-            base.OnStack(otherEffect);
-        }
     }
 }

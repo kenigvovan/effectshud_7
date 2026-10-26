@@ -16,40 +16,25 @@ namespace effectshud.src.DefaultEffects
         }
         public override void OnStart()
         {
-            if (this.entity.HasBehavior<EntityBehaviorBreathe>())
-            {
-                EntityBehaviorBreathe ebb = this.entity.GetBehavior<EntityBehaviorBreathe>();
-                ebb.MaxOxygen = ebb.MaxOxygen * (tier + 1);
-            }
+            SetMaxOxygen(tier + 1);
         }
         public override void OnStack(Effect otherEffect)
         {
-            if (this.tier > otherEffect.Tier)
-            {
-                return;
-            }
-            if (this.tier == otherEffect.Tier)
-            {
-                this.ExpireTick = otherEffect.ExpireTick;
-                this.TickCounter = otherEffect.TickCounter;
-                return;
-            }
-            this.tier = otherEffect.Tier;
-            if (this.entity.HasBehavior<EntityBehaviorBreathe>())
-            {
-                EntityBehaviorBreathe ebb = this.entity.GetBehavior<EntityBehaviorBreathe>();
-                ebb.MaxOxygen = ebb.MaxOxygen * (tier + 1);
-            }
-            this.ExpireTick = otherEffect.ExpireTick;
-            this.TickCounter = otherEffect.TickCounter;
+            base.OnStack(otherEffect);
+            SetMaxOxygen(tier + 1);
         }
         public override void OnExpire()
         {
-            if (this.entity.HasBehavior<EntityBehaviorBreathe>())
-            {
-                EntityBehaviorBreathe ebb = this.entity.GetBehavior<EntityBehaviorBreathe>();
-                ebb.MaxOxygen = (float)this.entity.World.Config.GetAsInt("lungCapacity", 40000);
-            }
+            SetMaxOxygen(1);
+        }
+
+        // Always derived from the world's base lung capacity: multiplying the current MaxOxygen compounded the
+        // bonus on every tier upgrade.
+        private void SetMaxOxygen(int multiplier)
+        {
+            EntityBehaviorBreathe ebb = this.entity.GetBehavior<EntityBehaviorBreathe>();
+            if (ebb == null) return;
+            ebb.MaxOxygen = (float)this.entity.World.Config.GetAsInt("lungCapacity", 40000) * multiplier;
         }
     }
 }

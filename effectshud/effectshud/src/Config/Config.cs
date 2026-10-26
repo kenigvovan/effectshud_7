@@ -2,7 +2,6 @@
 {
     public class Config
     {
-        public int HUD_ALIGNMENT = 11;
         public double TICK_EVERY_SECONDS = 1;
         public double EFFECT_ICON_SIZE = 32;
         public float HUD_X = -1f;
@@ -17,5 +16,7 @@
         public bool HUD_GROW_UP = false;
         public bool HUD_GROW_LEFT = false;
         public float HUD_TIMER_SCALE = 1.5f;
+        public bool HUD_BLINK_EXPIRING = true;
+        public bool HUD_POSNEG_BORDER = false;
     }
 }

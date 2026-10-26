@@ -242,18 +242,18 @@ namespace effectshud.src
             var rows = new List<EffRow>();
             var ebef = player.GetBehavior<EBEffectsAffected>();
             var list = ebef?.onlyClientsActiveEffects?.Values
-                .Where(e => e.duration > 0 || e.infinite)
+                .Where(e => (e.duration > 0 || e.infinite) && EffectDisplayUtil.ShouldRender(e.typeId))
                 .OrderBy(e => e.infinite ? double.MaxValue : e.duration)
                 .ToList();
             if (list == null) return rows;
 
             foreach (var ecd in list)
             {
-                string name = EffectName(ecd.typeId);
-                string tier = ecd.tier > 1 ? " " + ToRoman(ecd.tier) : "";
-                string time = ecd.infinite ? Lang.Get("effectshud:sheet-effect-permanent") : FormatTime(ecd.duration);
+                string name = EffectDisplayUtil.EffectName(ecd.typeId);
+                string tier = ecd.tier > 1 ? " " + EffectDisplayUtil.ToRoman(ecd.tier) : "";
+                string time = ecd.infinite ? Lang.Get("effectshud:sheet-effect-permanent") : EffectDisplayUtil.FormatTime(ecd.duration);
                 string mag = ecd.magnitude > 0.05f ? $"  ({ecd.magnitude:0.#})" : "";
-                rows.Add(new EffRow { Line = $"{name}{tier}   {time}{mag}", Icon = ResolveIcon(ecd.typeId) });
+                rows.Add(new EffRow { Line = $"{name}{tier}   {time}{mag}", Icon = EffectDisplayUtil.ResolveIcon(ecd.typeId) });
             }
             return rows;
         }
@@ -297,16 +297,6 @@ namespace effectshud.src
             }
         }
 
-        /// <summary>Resolve an effect's icon asset the same way the HUD does: a registered custom icon (any domain),
-        /// else the effectshud png convention. May point at a nonexistent asset — the draw guards against that.</summary>
-        private AssetLocation ResolveIcon(string typeId)
-        {
-            if (string.IsNullOrEmpty(typeId)) return null;
-            var custom = effectshud.Instance?.effectIcons;
-            if (custom != null && custom.TryGetValue(typeId, out var loc) && loc != null) return loc;
-            return new AssetLocation($"effectshud:textures/effects/{typeId}.png");
-        }
-
         // -------- helpers --------
 
         private static void MoveTo(ElementBounds bounds, double y)
@@ -316,45 +306,5 @@ namespace effectshud.src
             bounds.CalcWorldBounds();
         }
 
-        private string EffectName(string typeId)
-        {
-            if (string.IsNullOrEmpty(typeId)) return "?";
-            var resolvers = effectshud.Instance?.effectDisplayNames;
-            if (resolvers != null && resolvers.TryGetValue(typeId, out var fn) && fn != null)
-            {
-                try { var n = fn(); if (!string.IsNullOrEmpty(n)) return n; } catch { /* fall through */ }
-            }
-            string key = "effectshud:" + typeId;
-            return Lang.HasTranslation(key, true, false) ? Lang.Get(key) : Humanize(typeId);
-        }
-
-        private static string FormatTime(double seconds)
-        {
-            int total = Math.Max(0, (int)seconds);
-            return $"{total / 60}:{total % 60:D2}";
-        }
-
-        private static string Humanize(string id)
-        {
-            string s = id.Replace('_', ' ').Replace('-', ' ').Trim();
-            if (s.Length == 0) return id;
-            return char.ToUpperInvariant(s[0]) + s.Substring(1);
-        }
-
-        private static readonly (int value, string numeral)[] RomanMap =
-        {
-            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-            (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-            (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")
-        };
-
-        private static string ToRoman(int n)
-        {
-            if (n <= 0) return n.ToString();
-            var sb = new StringBuilder();
-            foreach (var (value, numeral) in RomanMap)
-                while (n >= value) { sb.Append(numeral); n -= value; }
-            return sb.ToString();
-        }
     }
 }

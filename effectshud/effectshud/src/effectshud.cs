@@ -7,6 +7,7 @@ using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.Config;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
 
@@ -18,9 +19,10 @@ namespace effectshud.src
         public static ICoreClientAPI ClientSideApi { get; private set; }
         public static ICoreServerAPI ServerSideApi { get; private set; }
         public const string harmonyID = "effectshud.Patches";
-        public static EffectsSelectionGuiImGui effectsSelectionGuiImGui { get; set; }
-        public HUDEffectsImGui effectsHUDImGui;
-        public HUDSettingsImGui hudSettingsImGui;
+        public static EffectsSelectionDialog effectsSelectionDialog { get; set; }
+        public HUDEffects effectsHUD;
+        public HUDSettingsDialog hudSettingsDialog;
+        private NightVisionRenderer nightVisionRenderer;
 
         public Harmony harmonyInstance;
         public Dictionary<string, Type> effects;
@@ -74,13 +76,13 @@ namespace effectshud.src
             ClientSideApi = api;
             base.StartClientSide(api);
             harmonyInstance = new Harmony(harmonyID);
-            api.Input.RegisterHotKey("effectsghud", "Show effects hud", GlKeys.L, HotkeyType.GUIOrOtherControls);
+            api.Input.RegisterHotKey("effectsghud", Lang.Get("effectshud:hotkey-toggle-hud"), GlKeys.L, HotkeyType.GUIOrOtherControls);
             api.Input.SetHotKeyHandler("effectsghud", new ActionConsumable<KeyCombination>(this.OnHotKeySkillDialog));
 
-            api.Input.RegisterHotKey("effectsghudgui", "Gui effects selection", GlKeys.L, HotkeyType.GUIOrOtherControls, false, false, true);
+            api.Input.RegisterHotKey("effectsghudgui", Lang.Get("effectshud:hotkey-effects-selection"), GlKeys.L, HotkeyType.GUIOrOtherControls, false, false, true);
             api.Input.SetHotKeyHandler("effectsghudgui", new ActionConsumable<KeyCombination>(this.OnHotKeyEffectsSelectionGui));
 
-            api.Input.RegisterHotKey("effectshudmove", "HUD Settings", GlKeys.L, HotkeyType.GUIOrOtherControls, true, false, false);
+            api.Input.RegisterHotKey("effectshudmove", Lang.Get("effectshud:hotkey-hud-settings"), GlKeys.L, HotkeyType.GUIOrOtherControls, true, false, false);
             api.Input.SetHotKeyHandler("effectshudmove", new ActionConsumable<KeyCombination>(this.OnHotKeyHUDSettings));
 
             harmonyInstance.Patch(typeof(Vintagestory.GameContent.GuiDialogWorldMap).GetMethod("OnGuiClosed"), postfix: new HarmonyMethod(typeof(HudOffsetPatch).GetMethod("Postfix_Map_OnGuiClosed")));
@@ -145,22 +147,11 @@ namespace effectshud.src
 
             });
 
-            effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
-            effectsHUDImGui.Open();
+            effectsHUD = new HUDEffects(ClientSideApi);
+            effectsHUD.TryOpen();
 
-            // TEMP diagnostic: ".efinvis" prints the invisibility render flag of every loaded player entity,
-            // to verify the WatchedAttributes flag actually reached this client. Remove once invis sync is confirmed.
-            api.ChatCommands.Create("efinvis").HandleWith((args) =>
-            {
-                var sb = new System.Text.StringBuilder();
-                foreach (var ent in ClientSideApi.World.LoadedEntities.Values)
-                {
-                    if (!(ent is EntityPlayer eplr)) continue;
-                    sb.AppendLine($"{eplr.GetName()} (id {ent.EntityId}): {ent.WatchedAttributes.GetBool(DefaultEffects.InvisibilityEffect.InvisibleAttr)}");
-                }
-                if (sb.Length == 0) sb.Append("no player entities loaded");
-                return TextCommandResult.Success(sb.ToString());
-            });
+            nightVisionRenderer = new NightVisionRenderer(api);
+            api.Event.RegisterRenderer(nightVisionRenderer, EnumRenderStage.Before, "effectshud-nightvision");
         }
         public static bool RegisterClientEffectData(string typeId, bool positive = true, bool shouldBeRendered = true, AssetLocation icon = null)
         {
@@ -202,40 +193,6 @@ namespace effectshud.src
             if (Instance != null) Instance.characterTabTitle = title;
         }
 
-        public static TextCommandResult addDefaultEffect(TextCommandCallingArgs args)
-        {
-            TextCommandResult tcr = new TextCommandResult();
-            tcr.Status = EnumCommandStatus.Success;
-
-            IServerPlayer player = args.Caller.Player as IServerPlayer;
-            if (player.WorldData.CurrentGameMode != EnumGameMode.Creative) return tcr;
-            if (args.RawArgs.Length < 4) return tcr;
-
-            ICoreServerAPI sapi = player.Entity.Api as ICoreServerAPI;
-            effectshud mod = sapi.ModLoader.GetModSystem<effectshud>();
-
-            mod.effects.TryGetValue(args.RawArgs[0], out Type effectType);
-            if (effectType == null) return tcr;
-
-            if (!int.TryParse(args.RawArgs[1], out int durationMin)) return tcr;
-            if (!int.TryParse(args.RawArgs[2], out int tier)) return tcr;
-
-            foreach (var it in sapi.World.AllOnlinePlayers)
-            {
-                if (it.PlayerName.Equals(args.RawArgs[3]))
-                {
-                    Effect ef = (Effect)Activator.CreateInstance(effectType);
-                    ef.SetExpiryInRealMinutes(durationMin);
-                    ef.Tier = tier;
-                    ef.positive = mod.effectsPosNeg.TryGetValue(ef.effectTypeId, out bool posneg) ? posneg : true;
-                    ApplyEffectOnEntity(it.Entity, ef);
-                    tcr.StatusMessage = "effectshud:effect-set-to-player-tier-duration";
-                    tcr.MessageParams = new object[] { effectType.Name, it.PlayerName, tier, durationMin };
-                    break;
-                }
-            }
-            return tcr;
-        }
         public override void StartServerSide(ICoreServerAPI api)
         {
             ServerSideApi = api;            
@@ -250,11 +207,9 @@ namespace effectshud.src
 
             base.StartServerSide(api);
 
-            ServerSideApi.ChatCommands.Create("ef").HandleWith(addDefaultEffect)
-               .RequiresPlayer().RequiresPrivilege(Privilege.controlserver).IgnoreAdditionalArgs();
+            EffectsCommands.Register(api);
 
             api.RegisterEntityBehaviorClass("affectedByEffects", typeof(EBEffectsAffected));
-            //api.Event.PlayerDisconnect += onPlayerLeft;
             ServerSideApi.Event.PlayerNowPlaying += (serverPlayer) =>
             {
                 // Own-HUD catch-up only. Invisibility of OTHERS needs no catch-up: it lives in the entity's
@@ -267,18 +222,9 @@ namespace effectshud.src
                 );
             };
         }
-        public void onPlayerLeft(IServerPlayer byPlayer)
-        {
-            EBEffectsAffected ebea = byPlayer.Entity.GetBehavior<EBEffectsAffected>();
-            if(ebea == null)
-            {
-                return;
-            }
-            ebea.serialize();
-        }
         public static bool RegisterEntityEffect(string typeId, Type effectType)
         {
-            Instance.effects.Add(typeId, effectType);
+            Instance.effects[typeId] = effectType;
             return true;
         }
         public static bool ApplyEffectOnEntity(Entity entity, Effect effect)
@@ -286,6 +232,14 @@ namespace effectshud.src
             EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
             if (ebea == null) return false;
             return ebea.AddEffect(effect);
+        }
+
+        /// <summary>Removes one effect (calling its OnExpire) and syncs the owner's HUD. False if it wasn't active.</summary>
+        public static bool RemoveEffectFromEntity(Entity entity, string typeId)
+        {
+            EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();
+            if (ebea == null) return false;
+            return ebea.RemoveEffect(typeId);
         }
 
         public static bool ApplyEffectsOnEntity(Entity entity, IEnumerable<Effect> effects)
@@ -297,47 +251,45 @@ namespace effectshud.src
         }
         private bool OnHotKeyEffectsSelectionGui(KeyCombination comb)
         {
-            if (effectsSelectionGuiImGui == null)
-            {
-                effectsSelectionGuiImGui = new EffectsSelectionGuiImGui(ClientSideApi);
-            }
-            if (effectsSelectionGuiImGui.IsOpened)
-            {
-                effectsSelectionGuiImGui.Close();
-            }
+            effectsSelectionDialog ??= new EffectsSelectionDialog(ClientSideApi);
+            if (effectsSelectionDialog.IsOpened())
+                effectsSelectionDialog.TryClose();
             else
-            {
-                effectsSelectionGuiImGui.Open();
-            }
+                effectsSelectionDialog.TryOpen();
             return true;
         }
         private bool OnHotKeyHUDSettings(KeyCombination comb)
         {
-            if (hudSettingsImGui == null)
-                hudSettingsImGui = new HUDSettingsImGui(ClientSideApi);
-            if (hudSettingsImGui.IsOpened)
-                hudSettingsImGui.Close();
+            hudSettingsDialog ??= new HUDSettingsDialog(ClientSideApi);
+            if (hudSettingsDialog.IsOpened())
+                hudSettingsDialog.TryClose();
             else
-                hudSettingsImGui.Open();
+                hudSettingsDialog.TryOpen();
             return true;
         }
         private bool OnHotKeySkillDialog(KeyCombination comb)
         {
-            if (effectsHUDImGui != null)
+            if (effectsHUD != null)
             {
-                effectsHUDImGui.Dispose();
-                effectsHUDImGui = null;
+                effectsHUD.TryClose();
+                effectsHUD.Dispose();
+                effectsHUD = null;
             }
             else
             {
-                effectsHUDImGui = new HUDEffectsImGui(ClientSideApi);
-                effectsHUDImGui.Open();
+                effectsHUD = new HUDEffects(ClientSideApi);
+                effectsHUD.TryOpen();
             }
             return true;
         }
         public override void Dispose()
         {
             base.Dispose();
+            if (nightVisionRenderer != null)
+            {
+                ClientSideApi?.Event.UnregisterRenderer(nightVisionRenderer, EnumRenderStage.Before);
+                nightVisionRenderer = null;
+            }
             harmonyInstance?.UnpatchAll(harmonyID);
             ClientSideApi = null;
             ServerSideApi = null;
@@ -355,12 +307,12 @@ namespace effectshud.src
             characterTabTitle = null;
             serverChannel = null;
 
-            hudSettingsImGui?.Dispose();
-            hudSettingsImGui = null;
-            effectsSelectionGuiImGui?.Dispose();
-            effectsSelectionGuiImGui = null;
-            effectsHUDImGui?.Dispose();
-            effectsHUDImGui = null;
+            hudSettingsDialog?.Dispose();
+            hudSettingsDialog = null;
+            effectsSelectionDialog?.Dispose();
+            effectsSelectionDialog = null;
+            effectsHUD?.Dispose();
+            effectsHUD = null;
             Instance = null;
         }
         private void loadConfig(ICoreAPI api)

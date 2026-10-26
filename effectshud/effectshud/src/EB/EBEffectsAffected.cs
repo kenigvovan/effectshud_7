@@ -27,8 +27,11 @@ namespace effectshud.src
         float accum = 0;
         private effectshud _mod;
         private effectshud Mod => _mod ??= entity.Api.ModLoader.GetModSystem<effectshud>();
+        /// <summary>Writes active effects into the entity's WatchedAttributes so they survive a save — called on every
+        /// add/remove/expiry/death, not just on despawn, so a server crash doesn't lose them.</summary>
         public void serialize()
         {
+            if (effectsTree == null) return; // client side / not initialized
             List<SerializedEffect> sel = new List<SerializedEffect>();
             foreach(var it in activeEffects)
             {
@@ -124,7 +127,8 @@ namespace effectshud.src
                     
                     foreach (var effect in activeEffects)
                     {
-                        if (effect.Value.ExpireTimestampInDays < now || effect.Value.ExpireTick <= effect.Value.TickCounter)
+                        if (!effect.Value.infinite
+                            && (effect.Value.ExpireTimestampInDays < now || effect.Value.ExpireTick <= effect.Value.TickCounter))
                         {
                             effectsToRemove.Add(effect.Key);
                             effect.Value.OnExpire();
@@ -146,7 +150,8 @@ namespace effectshud.src
                         }
                         SendEffectToClient(null, effectsToRemove);
                         effectsToRemove.Clear();
-                    }                  
+                        serialize();
+                    }
                 }
             }
             else
@@ -183,6 +188,7 @@ namespace effectshud.src
             if (this.needUpdate)
             {
                 SendEffectToClient(null, this.effectsToRemove);
+                serialize();
             }
             this.effectsToRemove.Clear();
             needUpdate = false;
@@ -192,21 +198,7 @@ namespace effectshud.src
 
         private EffectClientData CreateEffectClientData(Effect effect)
         {
-            float remainingSeconds;
-            if (effect.infinite)
-            {
-                remainingSeconds = 0;
-            }
-            else if (effect.ExpireTimestampInDays == double.PositiveInfinity)
-            {
-                remainingSeconds = (float)((effect.ExpireTick - effect.TickCounter) * Mod.config.TICK_EVERY_SECONDS);
-            }
-            else
-            {
-                var cal = entity.Api.World.Calendar;
-                double remainingDays = effect.ExpireTimestampInDays - Now;
-                remainingSeconds = (float)(remainingDays * 86400.0 / (cal.SpeedOfTime * cal.CalendarSpeedMul));
-            }
+            float remainingSeconds = effect.infinite ? 0 : (float)effect.RemainingSeconds();
 
             return new EffectClientData
             {
@@ -266,21 +258,26 @@ namespace effectshud.src
 
         public bool AddEffect(Effect ef)
         {
-            ApplyEffect(ef);
-            if (ef.ExpireTick != 0)
-                SendEffectToClient(ef);
+            // Sync the effect that is actually active after stacking, not the incoming one: stacking a weaker
+            // effect onto a stronger one keeps the stronger one's tier and timing.
+            Effect active = ApplyEffect(ef);
+            serialize();
+            if (ShouldSync(active))
+                SendEffectToClient(active);
             return true;
         }
 
         public void AddEffects(IEnumerable<Effect> effects)
         {
-            var toSync = new List<EffectClientData>();
+            var activeToSync = new Dictionary<string, Effect>();
             foreach (var ef in effects)
             {
-                ApplyEffect(ef);
-                if (ef.ExpireTick != 0)
-                    toSync.Add(CreateEffectClientData(ef));
+                Effect active = ApplyEffect(ef);
+                if (ShouldSync(active))
+                    activeToSync[active.effectTypeId] = active;
             }
+            serialize();
+            var toSync = activeToSync.Values.Select(CreateEffectClientData).ToList();
             if (toSync.Count == 0) return;
 
             var ownerPlayer = (entity as EntityPlayer)?.Player as IServerPlayer;
@@ -292,18 +289,45 @@ namespace effectshud.src
             }, ownerPlayer);
         }
 
-        private void ApplyEffect(Effect ef)
+        /// <summary>Removes one active effect (calling its OnExpire) and syncs the owner's HUD.</summary>
+        public bool RemoveEffect(string typeId)
+        {
+            if (!activeEffects.TryGetValue(typeId, out Effect ef)) return false;
+            ef.OnExpire();
+            activeEffects.Remove(typeId);
+            serialize();
+            SendEffectToClient(null, new HashSet<string> { typeId });
+            return true;
+        }
+
+        /// <summary>Removes all active effects (calling each OnExpire) and syncs the owner's HUD. Returns the count.</summary>
+        public int RemoveAllEffects()
+        {
+            var removed = new HashSet<string>(activeEffects.Keys);
+            foreach (var ef in activeEffects.Values.ToArray())
+            {
+                ef.OnExpire();
+            }
+            activeEffects.Clear();
+            serialize();
+            if (removed.Count > 0) SendEffectToClient(null, removed);
+            return removed.Count;
+        }
+
+        private static bool ShouldSync(Effect ef) => ef.ExpireTick != 0 || ef.infinite;
+
+        /// <summary>Applies or stacks the effect and returns the one that is active afterwards.</summary>
+        private Effect ApplyEffect(Effect ef)
         {
             if (activeEffects.TryGetValue(ef.effectTypeId, out Effect oldEffect))
             {
                 oldEffect.OnStack(ef);
+                return oldEffect;
             }
-            else
-            {
-                ef.entity = entity;
-                activeEffects.Add(ef.effectTypeId, ef);
-                ef.OnStart();
-            }
+            ef.entity = entity;
+            activeEffects.Add(ef.effectTypeId, ef);
+            ef.OnStart();
+            return ef;
         }
         public override void DidAttack(DamageSource source, EntityAgent targetEntity, ref EnumHandling handled)
         {
@@ -321,6 +345,21 @@ namespace effectshud.src
                 it.OnShouldEntityReceiveDamage(ref damage, dmgSource);
             }
             SendIfNeedsUpdate();
+
+            // Let the attacker's effects react to the damage they caused (e.g. vampirism).
+            if (damage > 0f && dmgSource != null && dmgSource.Type != EnumDamageType.Heal)
+            {
+                var attacker = dmgSource.GetCauseEntity();
+                var attackerEbea = attacker != null && attacker != entity ? attacker.GetBehavior<EBEffectsAffected>() : null;
+                if (attackerEbea != null)
+                {
+                    foreach (var it in attackerEbea.activeEffects.Values.ToArray())
+                    {
+                        it.OnDealtDamage(damage, entity, dmgSource);
+                    }
+                    attackerEbea.SendIfNeedsUpdate();
+                }
+            }
             return damage;
         }
 
