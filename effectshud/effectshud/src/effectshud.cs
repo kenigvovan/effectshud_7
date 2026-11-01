@@ -242,6 +242,9 @@ namespace effectshud.src
             return ebea.RemoveEffect(typeId);
         }
 
+        /// <summary>Client or server: visible effects of any entity (target frames, nameplates). Allocates; poll a few times a second.</summary>
+        public static List<EffectClientData> GetPublicEffects(Entity entity) => EBEffectsAffected.ReadPublicEffects(entity);
+
         public static bool ApplyEffectsOnEntity(Entity entity, IEnumerable<Effect> effects)
         {
             EBEffectsAffected ebea = entity.GetBehavior<EBEffectsAffected>();

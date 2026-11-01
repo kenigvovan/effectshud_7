@@ -43,6 +43,57 @@ namespace effectshud.src
             }
             effectsTree.SetString("activeEffectsData", JsonConvert.SerializeObject(sel));
             entity.WatchedAttributes.MarkPathDirty("activeEffects");
+            WritePublicEffects();
+        }
+
+        /// <summary>WatchedAttributes key of the compact effect list every client can read (target frames etc.).</summary>
+        public const string PublicEffectsAttr = "effectsPublic";
+
+        /// <summary>Visible effects for other clients; expiry is absolute calendar time so clients count down on their own.</summary>
+        private void WritePublicEffects()
+        {
+            if (effectsTree == null) return;
+            var cal = entity.World.Calendar;
+            double daysPerSecond = cal.SpeedOfTime * cal.CalendarSpeedMul / 86400.0;
+            var tree = new TreeAttribute();
+            foreach (var ef in activeEffects.Values)
+            {
+                if (!ShouldSync(ef) || !EffectDisplayUtil.ShouldRender(ef.effectTypeId)) continue;
+                var t = new TreeAttribute();
+                t.SetInt("tier", ef.Tier);
+                t.SetBool("pos", ef.positive);
+                t.SetFloat("mag", ef.DisplayMagnitude());
+                t.SetDouble("exp", ef.infinite ? -1 : cal.TotalDays + ef.RemainingSeconds() * daysPerSecond);
+                tree[ef.effectTypeId] = t;
+            }
+            entity.WatchedAttributes.SetAttribute(PublicEffectsAttr, tree);
+        }
+
+        /// <summary>Client-readable effects of any entity (mobs, other players), with remaining seconds computed now.</summary>
+        public static List<EffectClientData> ReadPublicEffects(Entity entity)
+        {
+            var result = new List<EffectClientData>();
+            if (entity?.WatchedAttributes.GetTreeAttribute(PublicEffectsAttr) is not ITreeAttribute tree) return result;
+            var cal = entity.World.Calendar;
+            double secondsPerDay = 86400.0 / (cal.SpeedOfTime * cal.CalendarSpeedMul);
+            foreach (var kv in tree)
+            {
+                if (kv.Value is not ITreeAttribute t) continue;
+                double exp = t.GetDouble("exp");
+                bool infinite = exp < 0;
+                double left = infinite ? 0 : (exp - cal.TotalDays) * secondsPerDay;
+                if (!infinite && left <= 0) continue;
+                result.Add(new EffectClientData
+                {
+                    typeId = kv.Key,
+                    duration = left,
+                    tier = t.GetInt("tier"),
+                    infinite = infinite,
+                    positive = t.GetBool("pos"),
+                    magnitude = t.GetFloat("mag")
+                });
+            }
+            return result;
         }
         public void deserialize()
         {
@@ -229,6 +280,7 @@ namespace effectshud.src
 
         public void SendAllEffectsToClient()
         {
+            WritePublicEffects(); // tier/charge changes come through here without a serialize()
             var ownerPlayer = (entity as EntityPlayer)?.Player as IServerPlayer;
             if (ownerPlayer == null) return;
 
